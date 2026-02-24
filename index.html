@@ -3,282 +3,456 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Nexus Tree - Enterprise Lineage</title>
+    <title>Nexus Tree · Enterprise Lineage</title>
     
-    <!-- Tailwind CSS -->
+    <!-- Tailwind + Fonts + Icons -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    fontFamily: { 
-                        sans: ['Inter', 'system-ui', 'sans-serif'],
-                        serif: ['Lora', 'Georgia', 'serif'],
-                        mono: ['Space Mono', 'monospace']
-                    },
-                    colors: {
-                        brand: { 50: '#eef2ff', 100: '#e0e7ff', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca', 900: '#312e81' }
-                    }
-                }
-            }
-        }
-    </script>
-    
-    <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <!-- Modern Image Export Library (Replaced html2canvas for flawless downloads) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js"></script>
-
+    
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Lora:ital,wght@0,400;0,600;1,400&family=Space+Mono:wght@400;700&display=swap');
         
-        body { overscroll-behavior-y: contain; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { overscroll-behavior: contain; background: #f8fafc; }
+        .dark body { background: #0f172a; }
         
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
         .dark ::-webkit-scrollbar-thumb { background: #475569; }
+        .dark ::-webkit-scrollbar-thumb:hover { background: #64748b; }
         
         .canvas-bg { background-image: radial-gradient(circle at 1px 1px, #cbd5e1 1px, transparent 0); background-size: 32px 32px; }
         .dark .canvas-bg { background-image: radial-gradient(circle at 1px 1px, #334155 1px, transparent 0); }
         
-        .node-element { transition: box-shadow 0.3s ease, border-color 0.3s ease; transform-origin: top left; touch-action: none; }
-        .action-btn { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); opacity: 0; pointer-events: none; transform: scale(0.8); }
-        .node-element:hover .action-btn, .node-element.selected .action-btn { opacity: 1; pointer-events: auto; transform: scale(1); }
-        .action-btn:hover { transform: scale(1.15) !important; }
+        .node-element { 
+            transition: box-shadow 0.2s ease, border-color 0.2s ease, filter 0.2s ease; 
+            transform-origin: top left; 
+            touch-action: none; 
+            user-select: none;
+            will-change: transform;
+            backface-visibility: hidden;
+        }
         
-        .path-anim { stroke-dasharray: 1000; stroke-dashoffset: 1000; animation: drawPath 0.8s ease forwards; }
+        .node-element::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            box-shadow: 0 10px 30px -10px rgba(0,0,0,0.2);
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            pointer-events: none;
+        }
+        
+        .node-element:hover::after {
+            opacity: 1;
+        }
+        
+        .action-btn { 
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); 
+            opacity: 0; 
+            pointer-events: none; 
+            transform: scale(0.8);
+            filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1));
+            z-index: 100;
+        }
+        
+        .node-element:hover .action-btn, 
+        .node-element.selected .action-btn,
+        .touch-device .action-btn { 
+            opacity: 1; 
+            pointer-events: auto; 
+            transform: scale(1); 
+        }
+        
+        .action-btn:hover { 
+            transform: scale(1.2) !important; 
+            background: #f3f4f6;
+            filter: drop-shadow(0 8px 12px rgba(0,0,0,0.15));
+        }
+        
+        .path-anim { 
+            stroke-dasharray: 1000; 
+            stroke-dashoffset: 1000; 
+            animation: drawPath 0.6s ease forwards;
+        }
+        
         @keyframes drawPath { to { stroke-dashoffset: 0; } }
         
-        @keyframes slideUp { from { transform: translate(-50%, 100%); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
-        .toast-enter { animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
-
+        #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; pointer-events: none; }
         #minimapViewport { transition: all 0.1s linear; }
-
-        /* Split Modifiers */
+        
+        /* split couple helpers */
         .split-left { border-top-right-radius: 0 !important; border-bottom-right-radius: 0 !important; border-right-width: 0 !important; }
         .split-right { border-top-left-radius: 0 !important; border-bottom-left-radius: 0 !important; }
+        
+        /* smooth grab */
+        .grabbing { cursor: grabbing !important; }
+        
+        /* premium loading animation */
+        .premium-glow {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .premium-glow::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent, rgba(255,255,255,0.1), transparent);
+            transform: rotate(45deg);
+            animation: shimmer 3s infinite;
+            pointer-events: none;
+        }
+        
+        @keyframes shimmer {
+            0% { transform: translateX(-100%) rotate(45deg); }
+            100% { transform: translateX(100%) rotate(45deg); }
+        }
+        
+        /* print styles */
+        @media print {
+            .node-element {
+                box-shadow: none !important;
+                border: 1px solid #000 !important;
+                background: white !important;
+                color: black !important;
+            }
+            .action-btn, #sidebar, .no-print { display: none !important; }
+            body { background: white; }
+        }
+        
+        /* keyboard shortcut hint */
+        .keyboard-hint {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 30px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            backdrop-filter: blur(4px);
+            z-index: 40;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+        
+        .keyboard-hint.visible {
+            opacity: 1;
+        }
     </style>
 </head>
-<body class="bg-gray-50 text-gray-900 transition-colors duration-300 overflow-hidden flex flex-col h-screen select-none font-sans">
+<body class="text-gray-900 transition-colors duration-300 overflow-hidden flex flex-col h-screen select-none font-sans dark:text-white">
 
-    <!-- 1. HEADER APP BAR -->
+    <!-- keyboard shortcuts hint -->
+    <div id="keyboardHint" class="keyboard-hint print:hidden">
+        <i class="fas fa-keyboard mr-2"></i> 
+        <span>Ctrl/⌘ + Z: Undo | Ctrl/⌘ + Y: Redo | Space: Fit View | Del: Delete</span>
+    </div>
+
+    <!-- ========== HEADER ========== -->
     <header class="relative z-20 flex items-center justify-between px-4 sm:px-6 py-3 bg-white/90 backdrop-blur-lg border-b border-gray-200 shadow-sm print:hidden dark:bg-gray-900/90 dark:border-gray-800">
         <div class="flex items-center gap-3">
-            <div class="flex items-center justify-center w-10 h-10 bg-gradient-to-br from-brand-500 to-blue-500 rounded-xl shadow-lg shadow-brand-500/20 text-white">
+            <div class="flex items-center justify-center w-10 h-10 bg-gradient-to-br from-indigo-600 to-indigo-400 rounded-xl shadow-lg text-white premium-glow">
                 <i class="fas fa-project-diagram fa-lg"></i>
             </div>
             <div>
-                <h1 class="text-lg font-bold leading-tight tracking-tight text-gray-900 dark:text-white">Nexus Tree</h1>
-                <p class="text-[10px] uppercase font-bold tracking-wider text-brand-600 dark:text-brand-400">Enterprise Lineage</p>
+                <h1 class="text-lg font-bold leading-tight tracking-tight bg-gradient-to-r from-indigo-600 to-indigo-400 bg-clip-text text-transparent dark:from-indigo-400 dark:to-indigo-300">Nexus Tree</h1>
+                <p class="text-[10px] uppercase font-bold tracking-wider text-indigo-600 dark:text-indigo-400">Enterprise Lineage v2.0</p>
             </div>
         </div>
         
         <div class="flex items-center gap-2 sm:gap-4">
+            <!-- search (desktop) -->
             <div class="relative hidden lg:block w-64">
-                <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm"></i>
+                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
                 <input type="text" id="searchInput" placeholder="Search relatives..." 
-                       class="w-full pl-9 pr-4 py-2 text-sm bg-gray-100 dark:bg-gray-800 dark:text-white border-none rounded-full focus:ring-2 focus:ring-brand-500 outline-none transition-all">
+                       class="w-full pl-9 pr-4 py-2 text-sm bg-gray-100 dark:bg-gray-800 dark:text-white border-none rounded-full focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
             </div>
 
             <div class="h-6 w-px bg-gray-300 dark:bg-gray-700 mx-1 hidden sm:block"></div>
 
-            <!-- History -->
-            <div class="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
-                <button id="btnUndo" class="p-1.5 rounded-md text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-700 disabled:opacity-30 transition-all"><i class="fas fa-undo"></i></button>
-                <button id="btnRedo" class="p-1.5 rounded-md text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-700 disabled:opacity-30 transition-all"><i class="fas fa-redo"></i></button>
+            <!-- history with badges -->
+            <div class="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1 relative">
+                <button id="btnUndo" class="p-1.5 rounded-md text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-700 disabled:opacity-30 transition-all relative" title="Undo (Ctrl+Z)">
+                    <i class="fas fa-undo"></i>
+                    <span class="absolute -top-1 -right-1 w-2 h-2 bg-indigo-500 rounded-full" id="undoDot" style="display: none;"></span>
+                </button>
+                <button id="btnRedo" class="p-1.5 rounded-md text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-700 disabled:opacity-30 transition-all" title="Redo (Ctrl+Y)">
+                    <i class="fas fa-redo"></i>
+                </button>
             </div>
 
-            <!-- Actions -->
+            <!-- actions -->
             <div class="flex gap-1 sm:gap-2 items-center">
-                <button id="btnHeaderAdd" class="px-3 py-1.5 h-9 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-lg shadow-md shadow-brand-500/20 flex items-center gap-1.5 transition-colors">
+                <button id="btnHeaderAdd" class="px-3 py-1.5 h-9 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-700 hover:to-indigo-600 text-white text-sm font-semibold rounded-lg shadow-md shadow-indigo-500/30 flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95">
                     <i class="fas fa-plus"></i><span class="hidden sm:inline">Add Root</span>
                 </button>
-                <button id="btnAutoLayout" title="Auto-Align Perfect Tree" class="p-2 w-9 h-9 flex items-center justify-center rounded-lg text-gray-600 dark:text-gray-400 hover:bg-brand-50 dark:hover:bg-brand-900/30 hover:text-brand-600 transition-colors"><i class="fas fa-magic"></i></button>
+                <button id="btnAutoLayout" title="Auto‑align tree (Ctrl+L)" class="p-2 w-9 h-9 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-600 transition-all hover:scale-110">
+                    <i class="fas fa-magic"></i>
+                </button>
                 
-                <!-- Appearance & Themes Menu -->
-                <button id="btnAppearanceMenu" title="Appearance" class="p-2 w-9 h-9 flex items-center justify-center rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors relative group">
-                    <i class="fas fa-palette"></i>
-                    <div class="absolute top-full right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all flex flex-col p-2 text-sm z-50 text-left">
+                <!-- appearance dropdown -->
+                <div class="relative group">
+                    <button id="btnAppearanceMenu" title="Appearance" class="p-2 w-9 h-9 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all hover:scale-110">
+                        <i class="fas fa-palette"></i>
+                    </button>
+                    <div class="absolute top-full right-0 mt-2 w-56 bg-white/95 dark:bg-gray-800/95 backdrop-blur-lg rounded-xl shadow-2xl border border-gray-100 dark:border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all flex flex-col p-2 text-sm z-50 text-left">
                         <div class="px-3 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Node Style</div>
-                        <div class="theme-option px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer flex justify-between items-center" data-theme="classic">
-                            <span class="font-sans">Classic Glass</span><i class="fas fa-check text-brand-500 hidden check-icon" data-check="classic"></i>
+                        <div class="theme-option px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer flex justify-between items-center transition-colors" data-theme="classic">
+                            <span class="font-sans">Classic Glass</span>
+                            <i class="fas fa-check text-indigo-500 hidden check-icon" data-check="classic"></i>
                         </div>
-                        <div class="theme-option px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer flex justify-between items-center" data-theme="elegant">
-                            <span class="font-serif">Elegant Serif</span><i class="fas fa-check text-brand-500 hidden check-icon" data-check="elegant"></i>
+                        <div class="theme-option px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer flex justify-between items-center transition-colors" data-theme="elegant">
+                            <span class="font-serif">Elegant Serif</span>
+                            <i class="fas fa-check text-indigo-500 hidden check-icon" data-check="elegant"></i>
                         </div>
-                        <div class="theme-option px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer flex justify-between items-center" data-theme="brutalism">
-                            <span class="font-mono">Modern Brutalism</span><i class="fas fa-check text-brand-500 hidden check-icon" data-check="brutalism"></i>
+                        <div class="theme-option px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer flex justify-between items-center transition-colors" data-theme="brutalism">
+                            <span class="font-mono">Modern Brutalism</span>
+                            <i class="fas fa-check text-indigo-500 hidden check-icon" data-check="brutalism"></i>
                         </div>
                         <div class="my-1 border-t border-gray-100 dark:border-gray-700"></div>
-                        <div id="btnThemeToggle" class="px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer flex items-center justify-between font-semibold text-brand-600 dark:text-brand-400">
-                            <span>Toggle Dark Mode</span> <i id="themeIcon" class="fas fa-moon"></i>
+                        <div class="theme-option px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer flex justify-between items-center" data-theme="midnight">
+                            <span>🌙 Midnight Pro</span>
+                            <i class="fas fa-check text-indigo-500 hidden check-icon" data-check="midnight"></i>
+                        </div>
+                        <div class="theme-option px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer flex justify-between items-center" data-theme="forest">
+                            <span>🌲 Forest</span>
+                            <i class="fas fa-check text-indigo-500 hidden check-icon" data-check="forest"></i>
+                        </div>
+                        <div class="my-1 border-t border-gray-100 dark:border-gray-700"></div>
+                        <div id="btnThemeToggle" class="px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer flex items-center justify-between font-semibold text-indigo-600 dark:text-indigo-400 transition-colors">
+                            <span>Toggle Dark Mode</span> 
+                            <i id="themeIcon" class="fas fa-moon"></i>
                         </div>
                     </div>
-                </button>
+                </div>
 
-                <!-- Export / Import -->
-                <button id="btnExportMenu" title="Export Menu" class="p-2 w-9 h-9 flex items-center justify-center rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors relative group">
-                    <i class="fas fa-cloud-download-alt"></i>
-                    <div class="absolute top-full right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all flex flex-col p-2 text-sm z-50 text-left">
-                        <div id="btnExportJSON" class="px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer flex items-center gap-2"><i class="fas fa-file-code text-blue-500 w-4"></i> JSON Backup</div>
-                        <div id="btnExportImage" class="px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer flex items-center gap-2"><i class="fas fa-image text-green-500 w-4"></i> PNG Image</div>
-                        <div id="btnPrint" class="px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer flex items-center gap-2"><i class="fas fa-file-pdf text-red-500 w-4"></i> Print / PDF</div>
+                <!-- export / import -->
+                <div class="relative group">
+                    <button id="btnExportMenu" title="Export" class="p-2 w-9 h-9 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all hover:scale-110">
+                        <i class="fas fa-cloud-download-alt"></i>
+                    </button>
+                    <div class="absolute top-full right-0 mt-2 w-48 bg-white/95 dark:bg-gray-800/95 backdrop-blur-lg rounded-xl shadow-2xl border border-gray-100 dark:border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all flex flex-col p-2 text-sm z-50 text-left">
+                        <div id="btnExportJSON" class="px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer flex items-center gap-2 transition-colors">
+                            <i class="fas fa-file-code text-blue-500 w-4"></i> JSON Backup
+                        </div>
+                        <div id="btnExportImage" class="px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer flex items-center gap-2 transition-colors">
+                            <i class="fas fa-image text-green-500 w-4"></i> PNG Image
+                        </div>
+                        <div id="btnExportSVG" class="px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer flex items-center gap-2 transition-colors">
+                            <i class="fas fa-draw-polygon text-purple-500 w-4"></i> SVG Vector
+                        </div>
+                        <div id="btnPrint" class="px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer flex items-center gap-2 transition-colors">
+                            <i class="fas fa-file-pdf text-red-500 w-4"></i> Print / PDF
+                        </div>
                     </div>
-                </button>
-                <label title="Import Backup" class="p-2 w-9 h-9 flex items-center justify-center rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors cursor-pointer">
-                    <i class="fas fa-cloud-upload-alt"></i><input type="file" id="fileImport" accept=".json" class="hidden" />
+                </div>
+                <label title="Import JSON" class="p-2 w-9 h-9 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer transition-all hover:scale-110">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                    <input type="file" id="fileImport" accept=".json" class="hidden" />
                 </label>
             </div>
         </div>
     </header>
 
-    <!-- 2. CANVAS WORKSPACE -->
-    <div id="canvasContainer" class="flex-1 relative overflow-hidden bg-[#f8fafc] dark:bg-[#0f172a] canvas-bg print:!bg-white print:!bg-none cursor-grab active:cursor-grabbing transition-colors duration-300 touch-none w-full">
+    <!-- ========== MAIN CANVAS ========== -->
+    <div id="canvasContainer" class="flex-1 relative overflow-hidden bg-[#f8fafc] dark:bg-[#0f172a] canvas-bg print:!bg-white print:!bg-none cursor-grab active:cursor-grabbing transition-colors touch-none w-full">
         
-        <div id="focusIndicator" class="absolute top-6 left-1/2 transform -translate-x-1/2 bg-amber-500 text-white px-4 py-2 rounded-full shadow-lg font-bold text-sm z-10 hidden flex items-center gap-2 pointer-events-auto cursor-pointer hover:bg-amber-600 transition">
-            <i class="fas fa-search-location"></i> Focusing on Branch <i class="fas fa-times-circle ml-1"></i>
+        <!-- focus indicator with animation -->
+        <div id="focusIndicator" class="absolute top-6 left-1/2 -translate-x-1/2 bg-gradient-to-r from-amber-500 to-amber-600 text-white px-4 py-2 rounded-full shadow-lg font-bold text-sm z-10 hidden items-center gap-2 pointer-events-auto cursor-pointer hover:from-amber-600 hover:to-amber-700 transition-all animate-bounce">
+            <i class="fas fa-search-location"></i> Focusing on Branch 
+            <i class="fas fa-times-circle ml-1 hover:scale-110 transition"></i>
         </div>
 
+        <!-- empty state with animation -->
         <div id="emptyState" class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10 print:hidden hidden">
-            <div class="w-32 h-32 mb-6 rounded-full bg-gradient-to-tr from-brand-100 to-blue-50 dark:from-brand-900/30 dark:to-blue-900/20 flex items-center justify-center border-4 border-white dark:border-gray-800 shadow-xl">
-                <i class="fas fa-sitemap text-5xl text-brand-500 opacity-80"></i>
+            <div class="w-32 h-32 mb-6 rounded-full bg-gradient-to-tr from-indigo-100 to-blue-50 dark:from-indigo-900/30 dark:to-blue-900/20 flex items-center justify-center border-4 border-white dark:border-gray-800 shadow-xl animate-pulse">
+                <i class="fas fa-sitemap text-5xl text-indigo-500 opacity-80"></i>
             </div>
             <h2 class="text-3xl font-extrabold text-gray-900 dark:text-white mb-3 tracking-tight">Trace Your Roots</h2>
-            <p class="text-gray-500 dark:text-gray-400 max-w-sm text-center mb-8 text-sm">Map generations, capture memories, and build your family's legacy visually.</p>
-            <button id="btnCreateFirst" class="pointer-events-auto px-6 py-3 bg-brand-600 hover:bg-brand-700 text-white rounded-full shadow-lg shadow-brand-500/30 font-semibold flex items-center gap-2 transition-all hover:scale-105 active:scale-95">
+            <p class="text-gray-500 dark:text-gray-400 max-w-sm text-center mb-8 text-sm">Map generations, capture memories, and build your legacy visually.</p>
+            <button id="btnCreateFirst" class="pointer-events-auto px-6 py-3 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-700 hover:to-indigo-600 text-white rounded-full shadow-lg shadow-indigo-500/30 font-semibold flex items-center gap-2 transition-all hover:scale-105 active:scale-95">
                 <i class="fas fa-seedling"></i> Plant First Seed
             </button>
         </div>
 
-        <!-- Transform Layer -->
-        <div id="canvas" class="absolute top-0 left-0 origin-top-left will-change-transform" style="transform: translate(0px, 0px) scale(1); width: 100%; height: 100%;">
+        <!-- transform layer with improved performance -->
+        <div id="canvas" class="absolute top-0 left-0 origin-top-left will-change-transform" style="transform: translate(0,0) scale(1); width:100%; height:100%;">
             <svg id="edgesLayer" class="absolute top-0 left-0 w-full h-full overflow-visible pointer-events-none z-0">
                 <defs>
                     <marker id="arrow-default" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
                         <path d="M 0 0 L 10 5 L 0 10 z" class="fill-gray-300 dark:fill-gray-600"></path>
                     </marker>
                     <marker id="arrow-active" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
-                        <path d="M 0 0 L 10 5 L 0 10 z" class="fill-brand-500"></path>
+                        <path d="M 0 0 L 10 5 L 0 10 z" class="fill-indigo-500"></path>
                     </marker>
                     <marker id="arrow-brutalism" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                         <path d="M 0 0 L 10 5 L 0 10 z" class="fill-gray-900 dark:fill-white"></path>
                     </marker>
+                    <!-- premium gradients -->
+                    <linearGradient id="gradient-active" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stop-color="#6366f1" />
+                        <stop offset="100%" stop-color="#8b5cf6" />
+                    </linearGradient>
                 </defs>
                 <g id="edgesGroup"></g>
             </svg>
             <div id="nodesLayer" class="absolute top-0 left-0 w-full h-full"></div>
         </div>
 
-        <!-- Viewport Controls & Settings -->
+        <!-- zoom controls with improved design -->
         <div class="no-pan absolute bottom-6 left-6 flex flex-col gap-3 print:hidden z-10">
             <div class="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-1.5 flex flex-col gap-1 w-12">
-                <button id="btnFitScreen" title="Fit to Screen" class="p-2 w-full rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"><i class="fas fa-compress text-sm"></i></button>
+                <button id="btnFitScreen" title="Fit to Screen (Space)" class="p-2 w-full rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all hover:scale-110">
+                    <i class="fas fa-compress text-sm"></i>
+                </button>
                 <div class="h-px w-full bg-gray-200 dark:bg-gray-700 my-0.5"></div>
-                <button id="btnZoomIn" title="Zoom In" class="p-2 w-full rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"><i class="fas fa-plus text-sm"></i></button>
-                <button id="btnZoomOut" title="Zoom Out" class="p-2 w-full rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"><i class="fas fa-minus text-sm"></i></button>
+                <button id="btnZoomIn" title="Zoom In (Ctrl++)" class="p-2 w-full rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all hover:scale-110">
+                    <i class="fas fa-plus text-sm"></i>
+                </button>
+                <button id="btnZoomOut" title="Zoom Out (Ctrl+-)" class="p-2 w-full rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all hover:scale-110">
+                    <i class="fas fa-minus text-sm"></i>
+                </button>
+            </div>
+            <!-- zoom percentage -->
+            <div class="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 px-3 py-1.5 text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400 text-center" id="zoomPercent">
+                100%
             </div>
         </div>
 
-        <!-- RADAR MINIMAP -->
-        <div id="minimapContainer" class="no-pan absolute bottom-6 right-6 w-48 h-32 bg-white/95 dark:bg-gray-800/95 backdrop-blur-md rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 print:hidden z-10 overflow-hidden hidden sm:block">
+        <!-- minimap with improved visibility -->
+        <div id="minimapContainer" class="no-pan absolute bottom-6 right-6 w-52 h-36 bg-white/95 dark:bg-gray-800/95 backdrop-blur-md rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 print:hidden z-10 overflow-hidden hidden sm:block hover:shadow-2xl transition-shadow">
             <div class="absolute inset-0 bg-gray-50 dark:bg-gray-900/50 m-2 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden relative" id="minimapInner">
                 <div id="minimapNodes" class="absolute inset-0 origin-top-left pointer-events-none"></div>
-                <div id="minimapViewport" class="absolute border-2 border-brand-500 bg-brand-500/10 rounded shadow-[0_0_0_9999px_rgba(0,0,0,0.1)] dark:shadow-[0_0_0_9999px_rgba(0,0,0,0.4)] pointer-events-none cursor-move"></div>
+                <div id="minimapViewport" class="absolute border-2 border-indigo-500 bg-indigo-500/10 rounded shadow-[0_0_0_9999px_rgba(0,0,0,0.1)] dark:shadow-[0_0_0_9999px_rgba(0,0,0,0.4)] pointer-events-none cursor-move"></div>
             </div>
-            <div class="absolute bottom-3 left-4 text-[9px] font-bold text-gray-400 tracking-widest uppercase pointer-events-none">Radar</div>
+            <div class="absolute bottom-2 left-3 text-[9px] font-bold text-gray-400 tracking-widest uppercase flex items-center gap-1">
+                <i class="fas fa-map"></i> RADAR
+            </div>
+            <div class="absolute bottom-2 right-3 text-[9px] font-bold text-indigo-500" id="nodeCount">0 nodes</div>
+        </div>
+
+        <!-- quick stats bar -->
+        <div class="no-pan absolute top-4 left-1/2 -translate-x-1/2 bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-full shadow-lg border border-gray-200 dark:border-gray-700 px-4 py-2 text-xs font-semibold flex items-center gap-4 print:hidden z-10">
+            <span><i class="fas fa-users text-indigo-500 mr-1"></i> <span id="totalNodes">0</span></span>
+            <span><i class="fas fa-venus-mars text-pink-500 mr-1"></i> <span id="genderRatio">0/0</span></span>
+            <span><i class="fas fa-heart text-red-500 mr-1"></i> <span id="totalCouples">0</span></span>
         </div>
     </div>
 
-    <!-- 3. ADVANCED SIDEBAR INSPECTOR -->
-    <aside id="sidebar" class="absolute top-0 right-0 h-full w-full sm:w-[380px] bg-white/95 dark:bg-gray-900/95 backdrop-blur-2xl shadow-2xl border-l border-gray-200 dark:border-gray-800 transform translate-x-full transition-transform duration-300 ease-in-out z-30 flex flex-col print:hidden">
+    <!-- ========== SIDEBAR INSPECTOR ========== -->
+    <aside id="sidebar" class="absolute top-0 right-0 h-full w-full sm:w-[400px] bg-white/95 dark:bg-gray-900/95 backdrop-blur-2xl shadow-2xl border-l border-gray-200 dark:border-gray-800 transform translate-x-full transition-transform duration-300 ease-in-out z-30 flex flex-col print:hidden">
         
         <div id="sidebarContent" class="flex flex-col h-full hidden">
-            <div class="flex justify-between items-center p-5 border-b border-gray-100 dark:border-gray-800 shrink-0 bg-gray-50/50 dark:bg-gray-800/50">
+            <div class="flex justify-between items-center p-5 border-b border-gray-100 dark:border-gray-800 shrink-0 bg-gradient-to-r from-indigo-50/50 to-transparent dark:from-indigo-900/20">
                 <h2 class="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                    <i class="fas fa-id-card text-brand-500"></i> Dossier
+                    <i class="fas fa-id-card text-indigo-500"></i> Dossier
                 </h2>
                 <div class="flex items-center gap-2">
-                    <button id="btnFocusNode" title="Isolate Branch" class="p-2 hover:bg-brand-50 dark:hover:bg-brand-900/30 text-brand-600 rounded-lg transition-colors text-sm font-semibold flex items-center gap-1.5 border border-brand-200 dark:border-brand-800 bg-white dark:bg-gray-800">
+                    <button id="btnFocusNode" title="Isolate Branch" class="p-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 text-indigo-600 rounded-lg transition-all text-sm font-semibold flex items-center gap-1.5 border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-gray-800 hover:scale-105">
                         <i class="fas fa-crosshairs"></i> Focus
                     </button>
-                    <button id="btnCloseSidebar" class="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors text-gray-500"><i class="fas fa-chevron-right"></i></button>
+                    <button id="btnCloseSidebar" class="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg text-gray-500 hover:scale-110 transition">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
                 </div>
             </div>
             
             <div class="flex-1 overflow-y-auto p-5 space-y-6">
-                <!-- Header / Photo -->
+                <!-- photo + name with improved upload -->
                 <div class="flex gap-4 items-start">
                     <div class="flex flex-col items-center shrink-0">
-                        <div class="w-24 h-24 rounded-2xl bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 overflow-hidden flex items-center justify-center relative group shadow-inner" id="sidebarPhotoContainer"></div>
-                        <button id="btnRemovePhoto" class="mt-2 text-[10px] uppercase font-bold text-red-500 hover:text-red-600 transition-colors hidden tracking-wider">Remove</button>
+                        <div class="w-24 h-24 rounded-2xl bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900 border-2 border-indigo-200 dark:border-indigo-800 overflow-hidden flex items-center justify-center relative group shadow-lg" id="sidebarPhotoContainer">
+                            <div class="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center">
+                                <i class="fas fa-camera text-white opacity-0 group-hover:opacity-100 transition-all text-xl"></i>
+                            </div>
+                        </div>
+                        <button id="btnRemovePhoto" class="mt-2 text-[10px] uppercase font-bold text-red-500 hover:text-red-600 transition-colors hidden tracking-wider">
+                            <i class="fas fa-trash-alt mr-1"></i> Remove
+                        </button>
                     </div>
                     <div class="flex-1 space-y-3 pt-1">
-                        <div>
-                            <input type="text" id="inpName" class="w-full bg-transparent border-b-2 border-transparent hover:border-gray-200 focus:border-brand-500 dark:hover:border-gray-700 outline-none text-xl font-bold text-gray-900 dark:text-white placeholder-gray-400 transition-all p-1 -ml-1" placeholder="Enter Full Name">
-                        </div>
-                        <div class="flex items-center gap-2">
+                        <input type="text" id="inpName" class="w-full bg-transparent border-b-2 border-transparent hover:border-gray-200 focus:border-indigo-500 dark:hover:border-gray-700 outline-none text-xl font-bold text-gray-900 dark:text-white placeholder-gray-400 p-1 -ml-1 transition-all" placeholder="Full Name">
+                        <div class="flex items-center gap-2 flex-wrap">
                             <select id="selGender" class="p-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 outline-none text-xs font-semibold text-gray-700 dark:text-gray-300">
-                                <option value="male">Male</option>
-                                <option value="female">Female</option>
-                                <option value="other">Other</option>
+                                <option value="male">♂ Male</option>
+                                <option value="female">♀ Female</option>
+                                <option value="other">⚧ Other</option>
                             </select>
-                            <label class="flex items-center gap-1.5 text-xs font-semibold cursor-pointer text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700">
+                            <label class="flex items-center gap-1.5 text-xs font-semibold cursor-pointer text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700 transition">
                                 <input type="checkbox" id="chkIsAlive" class="rounded text-green-500 focus:ring-green-500 border-gray-300"> Living
                             </label>
                         </div>
                     </div>
                 </div>
 
-                <!-- Life Events Form -->
-                <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
-                    <div class="bg-gray-50 dark:bg-gray-900/50 px-3 py-2 border-b border-gray-200 dark:border-gray-700 text-[10px] font-bold uppercase tracking-wider text-gray-500">Life Events</div>
+                <!-- life events with improved design -->
+                <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm hover:shadow-md transition">
+                    <div class="bg-gray-50 dark:bg-gray-900/50 px-3 py-2 border-b border-gray-200 dark:border-gray-700 text-[10px] font-bold uppercase tracking-wider text-gray-500 flex items-center justify-between">
+                        <span><i class="far fa-calendar-alt mr-1"></i> Life Events</span>
+                        <span id="lifespanDisplay" class="text-indigo-600 dark:text-indigo-400"></span>
+                    </div>
                     <div class="p-3 space-y-3">
                         <div class="grid grid-cols-2 gap-3">
                             <div>
                                 <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Born</label>
-                                <input type="date" id="inpBirthDate" class="w-full p-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 outline-none text-sm text-gray-900 dark:text-white">
+                                <input type="date" id="inpBirthDate" class="w-full p-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 outline-none text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500">
                             </div>
                             <div>
                                 <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Location</label>
-                                <input type="text" id="inpBirthPlace" placeholder="City, Country" class="w-full p-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 outline-none text-sm text-gray-900 dark:text-white">
+                                <input type="text" id="inpBirthPlace" placeholder="City, Country" class="w-full p-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 outline-none text-sm focus:ring-2 focus:ring-indigo-500">
                             </div>
                         </div>
                         <div class="grid grid-cols-2 gap-3 transition-opacity duration-300" id="deathFieldsGroup">
                             <div>
                                 <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Died</label>
-                                <input type="date" id="inpDeathDate" class="w-full p-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 outline-none text-sm text-gray-900 dark:text-white">
+                                <input type="date" id="inpDeathDate" class="w-full p-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 outline-none text-sm focus:ring-2 focus:ring-indigo-500">
                             </div>
                             <div class="flex items-end pb-1">
-                                <span id="lifespanDisplay" class="text-xs font-bold text-brand-600 dark:text-brand-400"></span>
+                                <span class="text-xs font-bold text-gray-500 dark:text-gray-400" id="ageDisplay"></span>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Biography -->
+                <!-- biography with rich text hint -->
                 <div>
                     <label class="block text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1.5 flex justify-between">
-                        Biography & Notes <i class="fas fa-pen-alt opacity-50"></i>
+                        <span><i class="fas fa-pen-alt mr-1"></i> Biography & Notes</span>
+                        <span class="text-[9px] text-gray-400">Markdown supported</span>
                     </label>
-                    <textarea id="inpNotes" class="w-full p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 outline-none resize-none h-32 text-sm text-gray-900 dark:text-white leading-relaxed shadow-inner" placeholder="Document historical facts, occupations, anecdotes..."></textarea>
+                    <textarea id="inpNotes" class="w-full p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 outline-none resize-none h-32 text-sm text-gray-900 dark:text-white leading-relaxed shadow-inner focus:ring-2 focus:ring-indigo-500" placeholder="Historical facts, anecdotes, legacy..."></textarea>
                 </div>
 
-                <!-- Relationships -->
-                <div class="bg-brand-50/50 dark:bg-brand-900/10 p-4 rounded-xl border border-brand-100 dark:border-brand-800/30">
-                    <h3 class="text-[11px] font-bold uppercase tracking-wider text-brand-800 dark:text-brand-400 mb-3 flex items-center gap-1.5">
+                <!-- ties with improved visualization -->
+                <div class="bg-gradient-to-br from-indigo-50 to-indigo-50/30 dark:from-indigo-900/10 dark:to-indigo-900/5 p-4 rounded-xl border border-indigo-100 dark:border-indigo-800/30">
+                    <h3 class="text-[11px] font-bold uppercase tracking-wider text-indigo-800 dark:text-indigo-400 mb-3 flex items-center gap-1.5">
                         <i class="fas fa-network-wired"></i> Direct Ties
+                        <span class="ml-auto text-[9px] bg-indigo-200 dark:bg-indigo-800 px-2 py-0.5 rounded-full" id="tieCount">0</span>
                     </h3>
                     <ul class="text-sm space-y-2.5" id="sidebarTiesList"></ul>
                 </div>
             </div>
 
-            <!-- Danger Zone -->
+            <!-- danger zone with improved actions -->
             <div class="p-5 border-t border-gray-100 dark:border-gray-800 shrink-0 bg-gray-50/50 dark:bg-gray-800/50 flex gap-2">
-                <button id="btnDeletePerson" class="flex-1 py-2.5 bg-white dark:bg-gray-800 border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 rounded-xl font-bold hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center gap-2 transition-all text-sm shadow-sm">
+                <button id="btnDeletePerson" class="flex-1 py-2.5 bg-white dark:bg-gray-800 border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 rounded-xl font-bold hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center gap-2 transition-all text-sm shadow-sm hover:scale-105">
                     <i class="fas fa-trash-alt"></i> Delete Node
+                </button>
+                <button id="btnDuplicatePerson" class="flex-1 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 rounded-xl font-bold hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center justify-center gap-2 transition-all text-sm shadow-sm hover:scale-105">
+                    <i class="fas fa-copy"></i> Duplicate
                 </button>
             </div>
         </div>
@@ -286,795 +460,1455 @@
         <div id="sidebarEmpty" class="flex-1 flex flex-col items-center justify-center text-gray-400 dark:text-gray-600 p-6 text-center">
             <i class="fas fa-fingerprint text-6xl mb-4 opacity-20"></i>
             <h3 class="text-lg font-bold mb-1 text-gray-500">No Node Selected</h3>
-            <p class="text-sm">Click on any person in the canvas to inspect their dossier.</p>
+            <p class="text-sm mb-4">Click any person to inspect their dossier</p>
+            <div class="text-[10px] text-gray-400 uppercase tracking-wider">or press <kbd class="bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded">ESC</kbd></div>
         </div>
     </aside>
 
-    <!-- TOAST NOTIFICATION -->
-    <div id="toast" class="fixed bottom-6 left-1/2 transform -translate-x-1/2 translate-y-24 opacity-0 z-50 print:hidden transition-all duration-300 pointer-events-none">
-        <div id="toastBody" class="px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-sm font-bold text-white bg-gray-900 dark:bg-white dark:text-gray-900">
+    <!-- ========== TOAST ========== -->
+    <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 translate-y-24 opacity-0 z-50 print:hidden transition-all duration-300 pointer-events-none">
+        <div id="toastBody" class="px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-sm font-bold text-white bg-gradient-to-r from-gray-900 to-gray-800 dark:from-white dark:to-gray-100 dark:text-gray-900">
             <i id="toastIcon" class="fas fa-info-circle text-lg"></i>
             <span id="toastMessage">Message</span>
         </div>
     </div>
 
-    <!-- MAIN ENGINE LOGIC -->
+    <!-- ========== SCRIPT ========== -->
     <script>
-        // ==========================================
-        // 1. ENGINE CONSTANTS & STATE
-        // ==========================================
-        const NODE_WIDTH = 260;
-        const NODE_HEIGHT = 110;
-        const GEN_SPACING_Y = 220;
-        const SIBLING_SPACING_X = 60;
-        const COUPLE_SPACING_X = 60;
+        (function() {
+            // ---------- CONFIG ----------
+            const NODE_WIDTH = 260;
+            const NODE_HEIGHT = 110;
+            const GEN_SPACING_Y = 220;
+            const SIBLING_SPACING_X = 60;
+            const COUPLE_SPACING_X = 60;
 
-        const generateId = () => Math.random().toString(36).substr(2, 9);
-        const getDefaultPerson = () => ({ 
-            id: '', name: '', gender: 'other', isAlive: true, 
-            birthDate: '', deathDate: '', birthPlace: '', photo: '', notes: '', 
-            parents: [], children: [], spouse: '', position: { x: 0, y: 0 } 
-        });
-
-        let state = {
-            people: {}, history: [], historyIndex: -1,
-            selectedId: null, focusId: null, searchQuery: '', 
-            theme: 'light', nodeStyle: 'classic', // classic | elegant | brutalism
-            transform: { x: 0, y: 0, scale: 1 }
-        };
-
-        // ==========================================
-        // 2. DOM MAPPING
-        // ==========================================
-        const $ = id => document.getElementById(id);
-        const els = {
-            canvasContainer: $('canvasContainer'), canvas: $('canvas'),
-            edgesGroup: $('edgesGroup'), nodesLayer: $('nodesLayer'),
-            emptyState: $('emptyState'), btnHeaderAdd: $('btnHeaderAdd'), btnCreateFirst: $('btnCreateFirst'),
-            
-            // Sidebar
-            sidebar: $('sidebar'), sidebarContent: $('sidebarContent'), sidebarEmpty: $('sidebarEmpty'),
-            sidebarPhotoContainer: $('sidebarPhotoContainer'), inpName: $('inpName'), selGender: $('selGender'),
-            chkIsAlive: $('chkIsAlive'), inpBirthDate: $('inpBirthDate'), inpDeathDate: $('inpDeathDate'),
-            inpBirthPlace: $('inpBirthPlace'), inpNotes: $('inpNotes'), btnRemovePhoto: $('btnRemovePhoto'),
-            sidebarTiesList: $('sidebarTiesList'), deathFieldsGroup: $('deathFieldsGroup'), lifespanDisplay: $('lifespanDisplay'),
-            btnCloseSidebar: $('btnCloseSidebar'), btnDeletePerson: $('btnDeletePerson'), btnFocusNode: $('btnFocusNode'),
-            
-            // Controls & Minimap
-            searchInput: $('searchInput'), btnUndo: $('btnUndo'), btnRedo: $('btnRedo'),
-            btnAutoLayout: $('btnAutoLayout'), btnExportJSON: $('btnExportJSON'), btnExportImage: $('btnExportImage'),
-            btnPrint: $('btnPrint'), fileImport: $('fileImport'), btnThemeToggle: $('btnThemeToggle'), themeIcon: $('themeIcon'),
-            btnFitScreen: $('btnFitScreen'), btnZoomIn: $('btnZoomIn'), btnZoomOut: $('btnZoomOut'),
-            toast: $('toast'), toastBody: $('toastBody'), toastIcon: $('toastIcon'), toastMessage: $('toastMessage'),
-            minimapContainer: $('minimapContainer'), minimapInner: $('minimapInner'), minimapNodes: $('minimapNodes'), minimapViewport: $('minimapViewport'),
-            focusIndicator: $('focusIndicator')
-        };
-
-        // ==========================================
-        // 3. CORE LOGIC & MATH
-        // ==========================================
-        function sanitizeData(data) {
-            const sanitized = {};
-            if (typeof data !== 'object' || !data) return sanitized;
-            for (let id in data) {
-                const p = data[id];
-                sanitized[id] = { ...getDefaultPerson(), ...p, parents: Array.isArray(p.parents) ? p.parents : [], children: Array.isArray(p.children) ? p.children : [], position: (p.position && typeof p.position.x === 'number') ? p.position : {x:0, y:0} };
-            }
-            return sanitized;
-        }
-
-        function updateHistory(newState, isInit = false) {
-            if (isInit) { state.history = [JSON.parse(JSON.stringify(newState))]; state.historyIndex = 0; } 
-            else {
-                state.history = state.history.slice(0, state.historyIndex + 1);
-                state.history.push(JSON.parse(JSON.stringify(newState)));
-                if (state.history.length > 30) state.history.shift();
-                state.historyIndex = state.history.length - 1;
-            }
-            if(els.btnUndo) els.btnUndo.disabled = state.historyIndex <= 0;
-            if(els.btnRedo) els.btnRedo.disabled = state.historyIndex >= state.history.length - 1;
-        }
-
-        function setPeople(newPeople) {
-            state.people = newPeople;
-            localStorage.setItem('nexusTreeData', JSON.stringify(state.people));
-            render();
-        }
-
-        function showToast(msg, type = 'info') {
-            if (!els.toast) return;
-            els.toastMessage.innerText = msg;
-            els.toastBody.className = `px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-sm font-bold text-white ${ type === 'error' ? 'bg-red-500' : type === 'success' ? 'bg-green-500' : 'bg-gray-900 dark:bg-white dark:text-gray-900' }`;
-            els.toastIcon.className = type === 'error' ? 'fas fa-exclamation-triangle text-lg' : 'fas fa-check-circle text-lg';
-            els.toast.classList.remove('translate-y-24', 'opacity-0');
-            setTimeout(() => els.toast.classList.add('translate-y-24', 'opacity-0'), 3000);
-        }
-
-        const getOrthogonalPath = (startX, startY, endX, endY, type = 'vertical') => {
-            if (type === 'vertical') {
-                const midY = startY + (endY - startY) / 2;
-                return `M ${startX} ${startY} L ${startX} ${midY} L ${endX} ${midY} L ${endX} ${endY}`;
-            } else {
-                const midX = startX + (endX - startX) / 2;
-                return `M ${startX} ${startY} L ${midX} ${startY} L ${midX} ${endY} L ${endX} ${endY}`;
-            }
-        };
-
-        const getSmoothBezier = (startX, startY, endX, endY, type = 'vertical') => {
-            if (type === 'vertical') {
-                const midY = startY + (endY - startY) / 2;
-                return `M ${startX} ${startY} C ${startX} ${midY}, ${endX} ${midY}, ${endX} ${endY}`;
-            } else {
-                const midX = startX + (endX - startX) / 2;
-                return `M ${startX} ${startY} C ${midX} ${startY}, ${midX} ${endY}, ${endX} ${endY}`;
-            }
-        };
-
-        const getBoundingBox = (nodesArray) => {
-            if (nodesArray.length === 0) return { minX: 0, maxX: 0, minY: 0, maxY: 0, width: 0, height: 0 };
-            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-            nodesArray.forEach(n => {
-                if (n.position.x < minX) minX = n.position.x; if (n.position.x > maxX) maxX = n.position.x;
-                if (n.position.y < minY) minY = n.position.y; if (n.position.y > maxY) maxY = n.position.y;
+            const generateId = () => Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
+            const getDefaultPerson = () => ({ 
+                id: '', name: '', gender: 'other', isAlive: true, 
+                birthDate: '', deathDate: '', birthPlace: '', photo: '', notes: '', 
+                parents: [], children: [], spouse: '', position: { x: 0, y: 0 },
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
             });
-            return { minX, maxX: maxX + NODE_WIDTH, minY, maxY: maxY + NODE_HEIGHT, width: maxX + NODE_WIDTH - minX, height: maxY + NODE_HEIGHT - minY };
-        };
 
-        function fitToScreen(animate = true) {
-            const activeNodes = Object.values(state.people).filter(n => !state.focusId || isNodeInFocus(n.id));
-            if (activeNodes.length === 0) return;
-            const rect = els.canvasContainer.getBoundingClientRect();
-            const box = getBoundingBox(activeNodes);
+            // ---------- STATE ----------
+            let state = {
+                people: {},
+                history: [],
+                historyIndex: -1,
+                selectedId: null,
+                focusId: null,
+                searchQuery: '',
+                theme: localStorage.getItem('nexusTheme') || 'light',
+                nodeStyle: localStorage.getItem('nexusNodeStyle') || 'classic',
+                transform: { x: 0, y: 0, scale: 1 },
+                lastSave: Date.now()
+            };
+
+            // ---------- DOM SHORTCUTS ----------
+            const $ = id => document.getElementById(id);
+            const els = {
+                canvasContainer: $('canvasContainer'), canvas: $('canvas'),
+                edgesGroup: $('edgesGroup'), nodesLayer: $('nodesLayer'),
+                emptyState: $('emptyState'), btnHeaderAdd: $('btnHeaderAdd'), btnCreateFirst: $('btnCreateFirst'),
+                sidebar: $('sidebar'), sidebarContent: $('sidebarContent'), sidebarEmpty: $('sidebarEmpty'),
+                sidebarPhotoContainer: $('sidebarPhotoContainer'), inpName: $('inpName'), selGender: $('selGender'),
+                chkIsAlive: $('chkIsAlive'), inpBirthDate: $('inpBirthDate'), inpDeathDate: $('inpDeathDate'),
+                inpBirthPlace: $('inpBirthPlace'), inpNotes: $('inpNotes'), btnRemovePhoto: $('btnRemovePhoto'),
+                sidebarTiesList: $('sidebarTiesList'), deathFieldsGroup: $('deathFieldsGroup'), 
+                lifespanDisplay: $('lifespanDisplay'), ageDisplay: $('ageDisplay'),
+                btnCloseSidebar: $('btnCloseSidebar'), btnDeletePerson: $('btnDeletePerson'), 
+                btnDuplicatePerson: $('btnDuplicatePerson'), btnFocusNode: $('btnFocusNode'),
+                searchInput: $('searchInput'), btnUndo: $('btnUndo'), btnRedo: $('btnRedo'),
+                btnAutoLayout: $('btnAutoLayout'), btnExportJSON: $('btnExportJSON'), 
+                btnExportImage: $('btnExportImage'), btnExportSVG: $('btnExportSVG'),
+                btnPrint: $('btnPrint'), fileImport: $('fileImport'), 
+                btnThemeToggle: $('btnThemeToggle'), themeIcon: $('themeIcon'),
+                btnFitScreen: $('btnFitScreen'), btnZoomIn: $('btnZoomIn'), btnZoomOut: $('btnZoomOut'),
+                toast: $('toast'), toastBody: $('toastBody'), toastIcon: $('toastIcon'), toastMessage: $('toastMessage'),
+                minimapContainer: $('minimapContainer'), minimapInner: $('minimapInner'), 
+                minimapNodes: $('minimapNodes'), minimapViewport: $('minimapViewport'),
+                focusIndicator: $('focusIndicator'), zoomPercent: $('zoomPercent'),
+                totalNodes: $('totalNodes'), genderRatio: $('genderRatio'), 
+                totalCouples: $('totalCouples'), nodeCount: $('nodeCount'),
+                tieCount: $('tieCount'), undoDot: $('undoDot'), keyboardHint: $('keyboardHint')
+            };
+
+            // ---------- HELPERS ----------
+            const sanitizeData = (data) => {
+                if (!data || typeof data !== 'object') return {};
+                const out = {};
+                for (let id in data) {
+                    const p = data[id];
+                    out[id] = { 
+                        ...getDefaultPerson(), 
+                        ...p, 
+                        parents: Array.isArray(p.parents) ? p.parents : [],
+                        children: Array.isArray(p.children) ? p.children : [],
+                        position: (p.position && typeof p.position.x === 'number') ? p.position : {x:0, y:0} 
+                    };
+                }
+                return out;
+            };
+
+            const saveToStorage = () => {
+                localStorage.setItem('nexusTreeData', JSON.stringify(state.people));
+                state.lastSave = Date.now();
+            };
+
+            const updateHistory = (newPeople, isInit = false) => {
+                if (isInit) {
+                    state.history = [JSON.parse(JSON.stringify(newPeople))];
+                    state.historyIndex = 0;
+                } else {
+                    state.history = state.history.slice(0, state.historyIndex + 1);
+                    state.history.push(JSON.parse(JSON.stringify(newPeople)));
+                    if (state.history.length > 50) state.history.shift();
+                    state.historyIndex = state.history.length - 1;
+                }
+                if (els.btnUndo) {
+                    els.btnUndo.disabled = state.historyIndex <= 0;
+                    if (els.undoDot) {
+                        els.undoDot.style.display = state.historyIndex > 0 ? 'block' : 'none';
+                    }
+                }
+                if (els.btnRedo) els.btnRedo.disabled = state.historyIndex >= state.history.length - 1;
+                saveToStorage();
+                updateStats();
+            };
+
+            const setPeople = (newPeople) => {
+                state.people = newPeople;
+                saveToStorage();
+                render();
+            };
+
+            const showToast = (msg, type = 'info', duration = 3000) => {
+                if (!els.toast) return;
+                els.toastMessage.innerText = msg;
+                els.toastBody.className = `px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-sm font-bold text-white ${ 
+                    type === 'error' ? 'bg-gradient-to-r from-red-600 to-red-500' : 
+                    type === 'success' ? 'bg-gradient-to-r from-green-600 to-green-500' : 
+                    'bg-gradient-to-r from-gray-900 to-gray-800 dark:from-white dark:to-gray-100 dark:text-gray-900'
+                }`;
+                els.toastIcon.className = type === 'error' ? 'fas fa-exclamation-triangle text-lg' : 
+                                         type === 'success' ? 'fas fa-check-circle text-lg' : 
+                                         'fas fa-info-circle text-lg';
+                els.toast.classList.remove('translate-y-24', 'opacity-0');
+                els.toast.classList.add('show');
+                setTimeout(() => {
+                    els.toast.classList.add('translate-y-24', 'opacity-0');
+                    els.toast.classList.remove('show');
+                }, duration);
+            };
+
+            // geometry functions
+            const getOrthogonalPath = (sx, sy, ex, ey, type) => {
+                if (type === 'vertical') {
+                    const midY = sy + (ey - sy)/2;
+                    return `M ${sx} ${sy} L ${sx} ${midY} L ${ex} ${midY} L ${ex} ${ey}`;
+                } else {
+                    const midX = sx + (ex - sx)/2;
+                    return `M ${sx} ${sy} L ${midX} ${sy} L ${midX} ${ey} L ${ex} ${ey}`;
+                }
+            };
             
-            const scaleX = rect.width / (box.width + 200);
-            const scaleY = rect.height / (box.height + 200);
-            const newScale = Math.min(Math.max(0.05, Math.min(scaleX, scaleY)), 1.2);
-            
-            state.transform = { x: rect.width / 2 - (box.minX + box.width / 2) * newScale, y: rect.height / 2 - (box.minY + box.height / 2) * newScale, scale: newScale };
-            applyTransform(animate);
-        }
+            const getSmoothBezier = (sx, sy, ex, ey, type) => {
+                if (type === 'vertical') {
+                    const midY = sy + (ey - sy)/2;
+                    return `M ${sx} ${sy} C ${sx} ${midY}, ${ex} ${midY}, ${ex} ${ey}`;
+                } else {
+                    const midX = sx + (ex - sx)/2;
+                    return `M ${sx} ${sy} C ${midX} ${sy}, ${midX} ${ey}, ${ex} ${ey}`;
+                }
+            };
 
-        function applyTransform(animate = false) {
-            els.canvas.style.transition = animate ? 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)' : 'none';
-            els.canvas.style.transform = `translate(${state.transform.x}px, ${state.transform.y}px) scale(${state.transform.scale})`;
-            updateMinimap();
-        }
+            const getBoundingBox = (nodes) => {
+                if (!nodes.length) return { minX:0,maxX:0,minY:0,maxY:0,width:0,height:0 };
+                let minX=Infinity, maxX=-Infinity, minY=Infinity, maxY=-Infinity;
+                nodes.forEach(n => {
+                    if (n.position.x < minX) minX = n.position.x;
+                    if (n.position.x > maxX) maxX = n.position.x;
+                    if (n.position.y < minY) minY = n.position.y;
+                    if (n.position.y > maxY) maxY = n.position.y;
+                });
+                return { minX, maxX: maxX+NODE_WIDTH, minY, maxY: maxY+NODE_HEIGHT, width: maxX+NODE_WIDTH - minX, height: maxY+NODE_HEIGHT - minY };
+            };
 
-        let focusCache = new Set();
-        function updateFocusCache() {
-            focusCache.clear();
-            if(!state.focusId || !state.people[state.focusId]) return;
-            const traverse = (id, dir) => {
-                (state.people[id]?.[dir] || []).forEach(relId => {
-                    if (!focusCache.has(relId)) { focusCache.add(relId); traverse(relId, dir); }
+            const fitToScreen = (animate = true) => {
+                const active = Object.values(state.people).filter(n => !state.focusId || isNodeInFocus(n.id));
+                if (!active.length) return;
+                const rect = els.canvasContainer.getBoundingClientRect();
+                const box = getBoundingBox(active);
+                const scaleX = rect.width / (box.width + 200);
+                const scaleY = rect.height / (box.height + 200);
+                const newScale = Math.min(Math.max(0.05, Math.min(scaleX, scaleY)), 1.5);
+                state.transform = {
+                    x: rect.width/2 - (box.minX + box.width/2) * newScale,
+                    y: rect.height/2 - (box.minY + box.height/2) * newScale,
+                    scale: newScale
+                };
+                applyTransform(animate);
+            };
+
+            const applyTransform = (animate = false) => {
+                els.canvas.style.transition = animate ? 'transform 0.4s cubic-bezier(0.34,1.56,0.64,1)' : 'none';
+                els.canvas.style.transform = `translate(${state.transform.x}px, ${state.transform.y}px) scale(${state.transform.scale})`;
+                if (els.zoomPercent) {
+                    els.zoomPercent.innerText = Math.round(state.transform.scale * 100) + '%';
+                }
+                updateMinimap();
+            };
+
+            let focusCache = new Set();
+            const updateFocusCache = () => {
+                focusCache.clear();
+                if (!state.focusId || !state.people[state.focusId]) return;
+                const traverse = (id, dir) => {
+                    (state.people[id]?.[dir] || []).forEach(relId => {
+                        if (!focusCache.has(relId)) { 
+                            focusCache.add(relId); 
+                            traverse(relId, dir); 
+                        }
+                    });
+                };
+                focusCache.add(state.focusId);
+                traverse(state.focusId, 'parents');
+                traverse(state.focusId, 'children');
+                Array.from(focusCache).forEach(id => { 
+                    if (state.people[id]?.spouse) focusCache.add(state.people[id].spouse); 
                 });
             };
-            focusCache.add(state.focusId);
-            traverse(state.focusId, 'parents');
-            traverse(state.focusId, 'children');
-            Array.from(focusCache).forEach(id => { if(state.people[id].spouse) focusCache.add(state.people[id].spouse); });
-        }
-        const isNodeInFocus = (id) => !state.focusId || focusCache.has(id);
+            
+            const isNodeInFocus = (id) => !state.focusId || focusCache.has(id);
 
-        function calcAgeSpan(person) {
-            if(!person.birthDate) return '';
-            const b = new Date(person.birthDate).getFullYear();
-            if(!person.isAlive && person.deathDate) {
-                const d = new Date(person.deathDate).getFullYear();
-                return `${b} - ${d} (${d - b}y)`;
-            }
-            return person.isAlive ? `${b} (${new Date().getFullYear() - b}y)` : `${b} - ?`;
-        }
+            const calcAgeSpan = (p) => {
+                if (!p.birthDate) return '';
+                const b = new Date(p.birthDate).getFullYear();
+                if (!p.isAlive && p.deathDate) {
+                    const d = new Date(p.deathDate).getFullYear();
+                    return `${b} - ${d} (${d-b}y)`;
+                }
+                const age = p.isAlive ? new Date().getFullYear() - b : 0;
+                return p.isAlive ? `${b} (${age}y)` : `${b} - ?`;
+            };
 
-        function calculateKinship(rootId) {
-            const rels = {};
-            if (!rootId || !state.people[rootId]) return rels;
-            const root = state.people[rootId];
-            rels[rootId] = 'Self';
-            const getGL = (pId, m, f, n) => { const g = state.people[pId]?.gender; return g === 'male' ? m : g === 'female' ? f : n; };
-
-            if (root.spouse) rels[root.spouse] = getGL(root.spouse, 'Husband', 'Wife', 'Spouse');
-            (root.parents || []).forEach(pId => {
-                rels[pId] = getGL(pId, 'Father', 'Mother', 'Parent');
-                (state.people[pId]?.parents || []).forEach(gpId => rels[gpId] = getGL(gpId, 'Grandfather', 'Grandmother', 'Grandparent'));
-                (state.people[pId]?.children || []).forEach(sId => { if (sId !== rootId && !rels[sId]) rels[sId] = getGL(sId, 'Brother', 'Sister', 'Sibling'); });
-            });
-            (root.children || []).forEach(cId => {
-                rels[cId] = getGL(cId, 'Son', 'Daughter', 'Child');
-                (state.people[cId]?.children || []).forEach(gcId => rels[gcId] = getGL(gcId, 'Grandson', 'Granddaughter', 'Grandchild'));
-            });
-            (root.parents || []).forEach(pId => {
-                (state.people[pId]?.parents || []).forEach(gpId => {
-                    (state.people[gpId]?.children || []).forEach(uaId => {
-                        if (uaId !== pId && !rels[uaId]) {
-                            rels[uaId] = getGL(uaId, 'Uncle', 'Aunt', 'Relative');
-                            (state.people[uaId]?.children || []).forEach(cId => { if(!rels[cId]) rels[cId] = 'Cousin'; });
+            const calculateKinship = (rootId) => {
+                const rels = {};
+                if (!rootId || !state.people[rootId]) return rels;
+                const root = state.people[rootId];
+                rels[rootId] = 'Self';
+                const getGL = (pid, m, f, n) => { 
+                    const g = state.people[pid]?.gender; 
+                    return g==='male' ? m : g==='female' ? f : n; 
+                };
+                
+                if (root.spouse) rels[root.spouse] = getGL(root.spouse, 'Husband', 'Wife', 'Spouse');
+                
+                (root.parents || []).forEach(pId => {
+                    rels[pId] = getGL(pId, 'Father', 'Mother', 'Parent');
+                    (state.people[pId]?.parents || []).forEach(gpId => {
+                        rels[gpId] = getGL(gpId, 'Grandfather', 'Grandmother', 'Grandparent');
+                    });
+                    (state.people[pId]?.children || []).forEach(sId => { 
+                        if (sId!==rootId && !rels[sId]) {
+                            rels[sId] = getGL(sId, 'Brother', 'Sister', 'Sibling');
                         }
                     });
                 });
-            });
-            return rels;
-        }
-
-        // PERFECT Symmetrical Hierarchical Auto-Layout
-        function performAutoLayout() {
-            const nP = JSON.parse(JSON.stringify(state.people));
-            const nodes = Object.values(nP);
-            if (nodes.length === 0) return;
-
-            const placed = new Set();
-
-            function layoutFamily(nodeId, depth, xOffset) {
-                if (placed.has(nodeId)) return 0;
                 
-                const node = nP[nodeId];
-                let spouseId = node.spouse && nP[node.spouse] && !placed.has(node.spouse) ? node.spouse : null;
-                
-                // Base width for the parent(s) (either just one node, or a split-card couple)
-                let familyWidth = spouseId ? (NODE_WIDTH * 2) : NODE_WIDTH;
-
-                // Recursively layout all children to determine the total width of the subtree
-                let childrenWidth = 0;
-                let childX = xOffset;
-                const placedChildren = [];
-                
-                (node.children || []).forEach(cId => {
-                    if (!placed.has(cId) && nP[cId]) {
-                        const cWidth = layoutFamily(cId, depth + 1, childX);
-                        childX += cWidth + SIBLING_SPACING_X;
-                        childrenWidth += cWidth + SIBLING_SPACING_X;
-                        placedChildren.push(cId);
-                    }
+                (root.children || []).forEach(cId => {
+                    rels[cId] = getGL(cId, 'Son', 'Daughter', 'Child');
+                    (state.people[cId]?.children || []).forEach(gcId => {
+                        rels[gcId] = getGL(gcId, 'Grandson', 'Granddaughter', 'Grandchild');
+                    });
                 });
                 
-                if (childrenWidth > 0) childrenWidth -= SIBLING_SPACING_X; // Remove trailing gap
+                return rels;
+            };
 
-                // Symmetrical Centering Logic
-                let myX = xOffset;
-                if (childrenWidth > familyWidth) {
-                    // Children take more space: Center parents exactly over the block of children
-                    myX = xOffset + (childrenWidth / 2) - (familyWidth / 2);
-                } else if (childrenWidth < familyWidth && childrenWidth > 0) {
-                    // Parents take more space: Shift all recursively placed children so they are centered under parents
-                    const shift = (familyWidth / 2) - (childrenWidth / 2);
-                    shiftSubtree(placedChildren, shift, nP);
-                    childrenWidth = familyWidth; // The subtree footprint expands to fit the parents
-                }
-
-                // Assign positions
-                node.position = { x: myX, y: depth * GEN_SPACING_Y };
-                placed.add(nodeId);
+            const updateStats = () => {
+                const nodes = Object.values(state.people);
+                const total = nodes.length;
+                if (els.totalNodes) els.totalNodes.innerText = total;
+                if (els.nodeCount) els.nodeCount.innerText = total + ' nodes';
                 
-                if (spouseId) {
-                    nP[spouseId].position = { x: myX + NODE_WIDTH, y: depth * GEN_SPACING_Y };
-                    placed.add(spouseId);
-                }
+                const males = nodes.filter(n => n.gender === 'male').length;
+                const females = nodes.filter(n => n.gender === 'female').length;
+                if (els.genderRatio) els.genderRatio.innerText = males + '/' + females;
+                
+                const couples = nodes.filter(n => n.spouse && n.id < n.spouse).length;
+                if (els.totalCouples) els.totalCouples.innerText = couples;
+            };
 
-                return Math.max(familyWidth, childrenWidth);
-            }
+            // ---------- AUTO LAYOUT (PERFECT SYMMETRY) ----------
+            const performAutoLayout = () => {
+                const nP = JSON.parse(JSON.stringify(state.people));
+                const nodes = Object.values(nP);
+                if (!nodes.length) return;
+                const placed = new Set();
 
-            // Helper to recursively shift already placed subtrees
-            function shiftSubtree(rootIds, shiftX, graph) {
-                const visited = new Set();
-                const q = [...rootIds];
-                while(q.length) {
-                    const id = q.shift();
-                    if(visited.has(id)) continue;
-                    visited.add(id);
-                    if(graph[id]) {
-                        graph[id].position.x += shiftX;
-                        if(graph[id].spouse && graph[graph[id].spouse]) {
-                            graph[graph[id].spouse].position.x += shiftX;
-                            visited.add(graph[id].spouse);
+                function layoutFamily(nodeId, depth, xOffset) {
+                    if (placed.has(nodeId)) return 0;
+                    const node = nP[nodeId];
+                    const spouseId = node.spouse && nP[node.spouse] && !placed.has(node.spouse) ? node.spouse : null;
+                    const familyWidth = spouseId ? (NODE_WIDTH*2) : NODE_WIDTH;
+
+                    let childrenWidth = 0;
+                    let childX = xOffset;
+                    const placedChildren = [];
+                    
+                    (node.children || []).forEach(cId => {
+                        if (!placed.has(cId) && nP[cId]) {
+                            const w = layoutFamily(cId, depth+1, childX);
+                            childX += w + SIBLING_SPACING_X;
+                            childrenWidth += w + SIBLING_SPACING_X;
+                            placedChildren.push(cId);
                         }
-                        (graph[id].children || []).forEach(c => q.push(c));
-                    }
-                }
-            }
-
-            // Find absolute roots (no parents)
-            const roots = nodes.filter(n => (!n.parents || n.parents.length === 0));
-            if (roots.length === 0) roots.push(nodes[0]);
-
-            let globalX = 0;
-            roots.forEach(root => {
-                if (!placed.has(root.id)) {
-                    const w = layoutFamily(root.id, 0, globalX);
-                    globalX += w + COUPLE_SPACING_X;
-                }
-            });
-
-            // Catch any disconnected subgraphs
-            nodes.forEach(n => {
-                if (!placed.has(n.id)) {
-                    const w = layoutFamily(n.id, 0, globalX);
-                    globalX += w + COUPLE_SPACING_X;
-                }
-            });
-
-            setPeople(nP); updateHistory(nP);
-            showToast("Tree beautifully and perfectly structured", "success");
-            setTimeout(() => fitToScreen(true), 50);
-        }
-
-        function handleSmartAdd(sourceId, type) {
-            const id = generateId(); let pos = { x: 0, y: 0 };
-            const nP = JSON.parse(JSON.stringify(state.people));
-
-            if (sourceId && nP[sourceId]) {
-                pos = { ...nP[sourceId].position };
-                if (type === 'parent') { pos.y -= GEN_SPACING_Y; pos.x += (Math.random()-0.5)*100; } 
-                else if (type === 'child') { pos.y += GEN_SPACING_Y; pos.x += (nP[sourceId].children?.length || 0) * 150; } 
-                else if (type === 'spouse') pos.x += NODE_WIDTH; // Precise Split card snap distance
-            } else {
-                const r = els.canvasContainer.getBoundingClientRect();
-                pos = { x: (-state.transform.x + r.width/2)/state.transform.scale - NODE_WIDTH/2, y: (-state.transform.y + r.height/2)/state.transform.scale - NODE_HEIGHT/2 };
-            }
-
-            nP[id] = { ...getDefaultPerson(), id, name: `New ${type==='root'?'Person':type}`, position: pos };
-            
-            if (sourceId) {
-                if (type === 'parent') { nP[sourceId].parents.push(id); nP[id].children = [sourceId]; } 
-                else if (type === 'child') { 
-                    nP[sourceId].children.push(id); nP[id].parents = [sourceId];
-                    if(nP[sourceId].spouse) { nP[nP[sourceId].spouse].children.push(id); nP[id].parents.push(nP[sourceId].spouse); }
-                } 
-                else if (type === 'spouse') { nP[sourceId].spouse = id; nP[id].spouse = sourceId; }
-            }
-
-            setPeople(nP); updateHistory(nP); state.selectedId = id; updateSidebar();
-        }
-
-        // ==========================================
-        // 4. THEME & RENDER ENGINE
-        // ==========================================
-        function updateThemeChecks() {
-            document.querySelectorAll('.check-icon').forEach(icon => {
-                icon.classList.toggle('hidden', icon.dataset.check !== state.nodeStyle);
-            });
-        }
-
-        function render() {
-            updateFocusCache();
-            updateThemeChecks();
-            const activeNodes = Object.values(state.people).filter(n => isNodeInFocus(n.id));
-            els.emptyState.classList.toggle('hidden', activeNodes.length > 0);
-            
-            if(state.focusId && state.people[state.focusId]) {
-                els.focusIndicator.innerHTML = `<i class="fas fa-search-location"></i> Focusing on ${state.people[state.focusId].name.split(' ')[0]}'s Branch <i class="fas fa-times-circle ml-1"></i>`;
-                els.focusIndicator.classList.remove('hidden');
-            } else { els.focusIndicator.classList.add('hidden'); }
-
-            const kinship = calculateKinship(state.selectedId);
-            let edgesHTML = '', nodesHTML = '';
-            
-            // Theme configuration maps
-            const isBrutal = state.nodeStyle === 'brutalism';
-            const isElegant = state.nodeStyle === 'elegant';
-            
-            let baseLineColor = state.theme === 'dark' ? '#334155' : '#cbd5e1';
-            if(isBrutal) baseLineColor = state.theme === 'dark' ? '#4b5563' : '#111827';
-            if(isElegant) baseLineColor = state.theme === 'dark' ? '#4a3b32' : '#d4c4a8';
-
-            activeNodes.forEach(person => {
-                const isSelected = state.selectedId === person.id;
-                const isHidden = state.searchQuery && !person.name.toLowerCase().includes(state.searchQuery.toLowerCase());
-                if (isHidden && !isSelected) return;
-
-                let isLeftSpouse = false, isRightSpouse = false;
-                if (person.spouse && state.people[person.spouse]) {
-                    const sp = state.people[person.spouse];
-                    if (person.position.y === sp.position.y && isNodeInFocus(sp.id)) {
-                        const dx = Math.round(sp.position.x - person.position.x);
-                        if (dx === NODE_WIDTH) isLeftSpouse = true;
-                        if (dx === -NODE_WIDTH) isRightSpouse = true;
-                    }
-                }
-
-                // --- Path Drawing (Theme Aware) ---
-                const drawPath = (sx, sy, ex, ey, direction) => isBrutal ? getOrthogonalPath(sx, sy, ex, ey, direction) : getSmoothBezier(sx, sy, ex, ey, direction);
-
-                (person.children || []).forEach(childId => {
-                    const child = state.people[childId];
-                    if (!child || !isNodeInFocus(childId)) return;
-                    let startX = person.position.x + NODE_WIDTH / 2;
-                    if (isLeftSpouse) startX += NODE_WIDTH / 2; 
-                    if (isRightSpouse) return; 
-
-                    const isActive = isSelected || state.selectedId === childId || !!kinship[person.id] || !!kinship[childId];
-                    const activeColor = isBrutal ? (state.theme==='dark'?'#ffffff':'#000000') : '#6366f1';
+                    });
                     
-                    edgesHTML += `<path d="${drawPath(startX, person.position.y + NODE_HEIGHT, child.position.x + NODE_WIDTH/2, child.position.y, 'vertical')}" 
-                                  stroke="${isActive ? activeColor : baseLineColor}" stroke-width="${isActive||isBrutal ? 3 : 2}" fill="none" 
-                                  marker-end="url(#arrow-${isBrutal?'brutalism':(isActive?'active':'default')})" class="path-anim"></path>`;
+                    if (childrenWidth > 0) childrenWidth -= SIBLING_SPACING_X;
+
+                    let myX = xOffset;
+                    if (childrenWidth > familyWidth) {
+                        myX = xOffset + (childrenWidth/2) - (familyWidth/2);
+                    } else if (childrenWidth < familyWidth && childrenWidth > 0) {
+                        const shift = (familyWidth/2) - (childrenWidth/2);
+                        shiftSubtree(placedChildren, shift, nP);
+                        childrenWidth = familyWidth;
+                    }
+
+                    node.position = { x: myX, y: depth * GEN_SPACING_Y };
+                    placed.add(nodeId);
+                    
+                    if (spouseId) {
+                        nP[spouseId].position = { x: myX + NODE_WIDTH, y: depth * GEN_SPACING_Y };
+                        placed.add(spouseId);
+                    }
+                    
+                    return Math.max(familyWidth, childrenWidth);
+                }
+
+                function shiftSubtree(rootIds, shiftX, graph) {
+                    const visited = new Set(), q = [...rootIds];
+                    while (q.length) {
+                        const id = q.shift();
+                        if (visited.has(id)) continue;
+                        visited.add(id);
+                        if (graph[id]) {
+                            graph[id].position.x += shiftX;
+                            if (graph[id].spouse && graph[graph[id].spouse]) {
+                                graph[graph[id].spouse].position.x += shiftX;
+                                visited.add(graph[id].spouse);
+                            }
+                            (graph[id].children || []).forEach(c => q.push(c));
+                        }
+                    }
+                }
+
+                const roots = nodes.filter(n => (!n.parents || n.parents.length === 0));
+                if (!roots.length && nodes.length) roots.push(nodes[0]);
+
+                let globalX = 0;
+                roots.forEach(root => {
+                    if (!placed.has(root.id)) {
+                        const w = layoutFamily(root.id, 0, globalX);
+                        globalX += w + COUPLE_SPACING_X;
+                    }
+                });
+                
+                nodes.forEach(n => {
+                    if (!placed.has(n.id)) {
+                        const w = layoutFamily(n.id, 0, globalX);
+                        globalX += w + COUPLE_SPACING_X;
+                    }
                 });
 
-                // Missing Spouse Connection Fallback
-                if (!isLeftSpouse && !isRightSpouse && person.spouse && state.people[person.spouse] && person.id < person.spouse && isNodeInFocus(person.spouse)) {
-                    const sp = state.people[person.spouse];
-                    const isActive = isSelected || state.selectedId === sp.id;
-                    const activeColor = isBrutal ? (state.theme==='dark'?'#ffffff':'#000000') : '#ec4899';
-                    const sColor = isBrutal ? baseLineColor : (state.theme==='dark'?'#831843':'#fbcfe8');
-                    
-                    edgesHTML += `<path d="${drawPath(person.position.x + NODE_WIDTH, person.position.y + NODE_HEIGHT/2, sp.position.x, sp.position.y + NODE_HEIGHT/2, 'horizontal')}" 
-                                  stroke="${isActive ? activeColor : sColor}" stroke-width="3" stroke-dasharray="5,5" fill="none" class="path-anim"></path>`;
-                }
+                setPeople(nP);
+                updateHistory(nP);
+                showToast("✨ Tree perfectly structured", "success");
+                setTimeout(() => fitToScreen(true), 50);
+            };
 
-                // --- Node Styles (Theme Engine) ---
-                let nodeBaseClass = "", splitModifiers = "", photoClass = "", fontClass = "font-sans";
-                let badge = '';
-
-                if (isBrutal) {
-                    fontClass = "font-mono";
-                    nodeBaseClass = "bg-white dark:bg-gray-900 border-2 border-gray-900 dark:border-white rounded-none";
-                    if(isSelected) nodeBaseClass += " shadow-[6px_6px_0px_0px_rgba(99,102,241,1)]";
-                    else nodeBaseClass += " shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,1)]";
-                    
-                    if (isLeftSpouse) splitModifiers = "!border-r-0";
-                    if (isLeftSpouse) badge = `<div class="absolute -right-[15px] top-1/2 transform -translate-y-1/2 bg-white dark:bg-gray-900 border-2 border-gray-900 dark:border-white w-[30px] h-[30px] flex items-center justify-center z-50 font-bold">+</div>`;
-                    
-                    photoClass = "rounded-none border-2 border-gray-900 dark:border-white bg-gray-100 dark:bg-gray-800";
-                } 
-                else if (isElegant) {
-                    fontClass = "font-serif";
-                    nodeBaseClass = "bg-[#faf9f6] dark:bg-[#2a2421] border border-[#d4c4a8] dark:border-[#4a3b32] rounded-lg shadow-lg";
-                    if(isSelected) nodeBaseClass += " ring-2 ring-[#d4c4a8] dark:ring-[#a8987b]";
-                    
-                    if (isLeftSpouse) splitModifiers = "!rounded-r-none !border-r-0";
-                    if (isRightSpouse) splitModifiers = "!rounded-l-none";
-                    if (isLeftSpouse) badge = `<div class="absolute -right-[15px] top-1/2 transform -translate-y-1/2 bg-[#faf9f6] dark:bg-[#2a2421] border border-[#d4c4a8] dark:border-[#4a3b32] rounded-full w-[30px] h-[30px] flex items-center justify-center z-50 shadow-md"><i class="fas fa-link text-[#a8987b] text-[10px]"></i></div>`;
-                    
-                    photoClass = "rounded-full border border-[#d4c4a8] dark:border-[#4a3b32] shadow-sm bg-white dark:bg-black/20 p-0.5";
-                } 
-                else { // Classic
-                    fontClass = "font-sans";
-                    nodeBaseClass = "bg-white/95 dark:bg-gray-800/95 backdrop-blur-md rounded-2xl ring-1 ring-gray-200 dark:ring-gray-700 shadow-sm";
-                    if(isSelected) nodeBaseClass += " ring-2 ring-brand-500 shadow-xl shadow-brand-500/20 bg-brand-50/80 dark:bg-brand-900/30";
-                    
-                    if (isLeftSpouse) splitModifiers = "split-left";
-                    if (isRightSpouse) splitModifiers = "split-right";
-                    if (isLeftSpouse) badge = `<div class="absolute -right-[15px] top-1/2 transform -translate-y-1/2 bg-white dark:bg-gray-800 border-2 border-pink-400 rounded-full w-[30px] h-[30px] flex items-center justify-center z-50 shadow-md"><i class="fas fa-heart text-pink-500 text-[11px]"></i></div>`;
-                    
-                    photoClass = "rounded-full shadow-inner border border-gray-200 dark:border-gray-600 bg-gray-100 dark:bg-gray-700";
-                }
-
-                // Add Highlight Rings
-                if (!isSelected && kinship[person.id] && kinship[person.id] !== 'Self') {
-                    if(state.nodeStyle === 'classic') nodeBaseClass += ' ring-2 ring-brand-300 dark:ring-brand-700 shadow-lg shadow-brand-500/10';
-                }
-
-                const gColor = person.gender === 'male' ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300 ring-1 ring-sky-200 dark:ring-sky-800' : person.gender === 'female' ? 'bg-pink-100 text-pink-700 dark:bg-pink-900/50 dark:text-pink-300 ring-1 ring-pink-200 dark:ring-pink-800' : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 ring-1 ring-gray-200 dark:ring-gray-700';
-                const photo = person.photo ? `<img src="${person.photo}" class="w-full h-full object-cover ${isElegant?'rounded-full':(isBrutal?'rounded-none':'rounded-full')}">` : `<i class="fas fa-user text-gray-400 text-xl"></i>`;
+            // ---------- SMART ADD ----------
+            const handleSmartAdd = (sourceId, type) => {
+                const id = generateId();
+                const nP = JSON.parse(JSON.stringify(state.people));
+                let pos = { x: 0, y: 0 };
                 
-                const deadMarker = !person.isAlive ? `<div class="absolute top-2 right-2 text-gray-400 dark:text-gray-500" title="Deceased"><i class="fas fa-ribbon text-[10px]"></i></div>` : '';
-                const kinLabel = kinship[person.id] && person.id !== state.selectedId ? `<div class="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-brand-600 dark:bg-brand-500 text-white text-[10px] uppercase font-bold px-3 py-0.5 rounded-full shadow-md whitespace-nowrap z-50 tracking-wider">${kinship[person.id]}</div>` : '';
+                if (sourceId && nP[sourceId]) {
+                    pos = { ...nP[sourceId].position };
+                    if (type === 'parent') { 
+                        pos.y -= GEN_SPACING_Y; 
+                        pos.x += (Math.random()-0.5)*100; 
+                    } else if (type === 'child') { 
+                        pos.y += GEN_SPACING_Y; 
+                        pos.x += (nP[sourceId].children?.length || 0) * 150; 
+                    } else if (type === 'spouse') {
+                        pos.x += NODE_WIDTH;
+                    }
+                } else {
+                    const r = els.canvasContainer.getBoundingClientRect();
+                    pos = { 
+                        x: (-state.transform.x + r.width/2)/state.transform.scale - NODE_WIDTH/2, 
+                        y: (-state.transform.y + r.height/2)/state.transform.scale - NODE_HEIGHT/2 
+                    };
+                }
 
-                nodesHTML += `
-                    <div class="node-element absolute top-0 left-0 transition-all duration-300 cursor-pointer print:!ring-gray-300 print:!shadow-none group ${fontClass} ${nodeBaseClass} ${splitModifiers}"
-                         style="transform: translate(${person.position.x}px, ${person.position.y}px); width: ${NODE_WIDTH}px; height: ${NODE_HEIGHT}px; z-index: ${isSelected ? 100 : 10}" data-id="${person.id}">
+                nP[id] = { 
+                    ...getDefaultPerson(), 
+                    id, 
+                    name: `New ${type==='root'?'Person':type}`,
+                    position: pos,
+                    createdAt: new Date().toISOString()
+                };
+                
+                if (sourceId) {
+                    if (type === 'parent') {
+                        nP[sourceId].parents.push(id);
+                        nP[id].children = [sourceId];
+                    } else if (type === 'child') {
+                        nP[sourceId].children.push(id);
+                        nP[id].parents = [sourceId];
+                        if (nP[sourceId].spouse) {
+                            nP[nP[sourceId].spouse].children.push(id);
+                            nP[id].parents.push(nP[sourceId].spouse);
+                        }
+                    } else if (type === 'spouse') {
+                        nP[sourceId].spouse = id;
+                        nP[id].spouse = sourceId;
+                    }
+                }
+
+                setPeople(nP);
+                updateHistory(nP);
+                state.selectedId = id;
+                updateSidebar();
+                showToast(`✨ Added new ${type}`, "success");
+            };
+
+            // ---------- RENDER (with style themes) ----------
+            const updateThemeChecks = () => {
+                document.querySelectorAll('.check-icon').forEach(ic => 
+                    ic.classList.toggle('hidden', ic.dataset.check !== state.nodeStyle)
+                );
+            };
+
+            const render = () => {
+                updateFocusCache();
+                updateThemeChecks();
+                const activeNodes = Object.values(state.people).filter(n => isNodeInFocus(n.id));
+                els.emptyState.classList.toggle('hidden', activeNodes.length > 0);
+
+                if (state.focusId && state.people[state.focusId]) {
+                    els.focusIndicator.innerHTML = `<i class="fas fa-search-location"></i> Focusing on ${state.people[state.focusId].name.split(' ')[0] || 'person'}'s Branch <i class="fas fa-times-circle ml-1 hover:scale-110 transition"></i>`;
+                    els.focusIndicator.classList.remove('hidden');
+                } else {
+                    els.focusIndicator.classList.add('hidden');
+                }
+
+                const kinship = calculateKinship(state.selectedId);
+                let edgesHTML = '', nodesHTML = '';
+
+                const isBrutal = state.nodeStyle === 'brutalism';
+                const isElegant = state.nodeStyle === 'elegant';
+                const isMidnight = state.nodeStyle === 'midnight';
+                const isForest = state.nodeStyle === 'forest';
+                
+                let baseLineColor = state.theme === 'dark' ? '#334155' : '#cbd5e1';
+                if (isBrutal) baseLineColor = state.theme === 'dark' ? '#4b5563' : '#111827';
+                if (isElegant) baseLineColor = state.theme === 'dark' ? '#4a3b32' : '#d4c4a8';
+                if (isMidnight) baseLineColor = state.theme === 'dark' ? '#60a5fa' : '#2563eb';
+                if (isForest) baseLineColor = state.theme === 'dark' ? '#6ee7b7' : '#059669';
+
+                activeNodes.forEach(person => {
+                    const isSelected = state.selectedId === person.id;
+                    if (state.searchQuery && !person.name.toLowerCase().includes(state.searchQuery.toLowerCase()) && !isSelected) return;
+
+                    let isLeftSpouse = false, isRightSpouse = false;
+                    if (person.spouse && state.people[person.spouse]) {
+                        const sp = state.people[person.spouse];
+                        if (person.position.y === sp.position.y && isNodeInFocus(sp.id)) {
+                            const dx = Math.round(sp.position.x - person.position.x);
+                            if (dx === NODE_WIDTH) isLeftSpouse = true;
+                            if (dx === -NODE_WIDTH) isRightSpouse = true;
+                        }
+                    }
+
+                    const drawPath = (sx, sy, ex, ey, dir) => 
+                        isBrutal ? getOrthogonalPath(sx, sy, ex, ey, dir) : getSmoothBezier(sx, sy, ex, ey, dir);
+
+                    // Draw child connections
+                    (person.children || []).forEach(childId => {
+                        const child = state.people[childId];
+                        if (!child || !isNodeInFocus(childId)) return;
+                        let startX = person.position.x + NODE_WIDTH/2;
+                        if (isLeftSpouse) startX += NODE_WIDTH/2;
+                        if (isRightSpouse) return;
+                        
+                        const isActive = isSelected || state.selectedId===childId || !!kinship[person.id] || !!kinship[childId];
+                        let activeColor = isBrutal ? (state.theme==='dark'?'#fff':'#000') : '#6366f1';
+                        if (isMidnight) activeColor = '#60a5fa';
+                        if (isForest) activeColor = '#10b981';
+                        
+                        edgesHTML += `<path d="${drawPath(startX, person.position.y+NODE_HEIGHT, child.position.x+NODE_WIDTH/2, child.position.y, 'vertical')}" 
+                                      stroke="${isActive ? activeColor : baseLineColor}" 
+                                      stroke-width="${isActive||isBrutal ? 3 : 2}" 
+                                      fill="none" 
+                                      marker-end="url(#arrow-${isBrutal?'brutalism':(isActive?'active':'default')})" 
+                                      class="path-anim"></path>`;
+                    });
+
+                    // Draw spouse connection if needed
+                    if (!isLeftSpouse && !isRightSpouse && person.spouse && state.people[person.spouse] && person.id < person.spouse && isNodeInFocus(person.spouse)) {
+                        const sp = state.people[person.spouse];
+                        const isActive = isSelected || state.selectedId===sp.id;
+                        let activeColor = isBrutal ? (state.theme==='dark'?'#fff':'#000') : '#ec4899';
+                        if (isMidnight) activeColor = '#f472b6';
+                        if (isForest) activeColor = '#d97706';
+                        
+                        const sColor = isBrutal ? baseLineColor : (state.theme==='dark'?'#831843':'#fbcfe8');
+                        
+                        edgesHTML += `<path d="${drawPath(person.position.x+NODE_WIDTH, person.position.y+NODE_HEIGHT/2, sp.position.x, sp.position.y+NODE_HEIGHT/2, 'horizontal')}" 
+                                      stroke="${isActive ? activeColor : sColor}" 
+                                      stroke-width="3" 
+                                      stroke-dasharray="5,5" 
+                                      fill="none" 
+                                      class="path-anim"></path>`;
+                    }
+
+                    // node style application
+                    let nodeClass = '', splitMod = '', photoClass = '', badge = '', fontClass = 'font-sans';
+                    
+                    // Theme-based styling
+                    if (isBrutal) {
+                        fontClass = 'font-mono';
+                        nodeClass = 'bg-white dark:bg-gray-900 border-2 border-gray-900 dark:border-white rounded-none';
+                        if (isSelected) nodeClass += ' shadow-[6px_6px_0px_0px_#6366f1]';
+                        else nodeClass += ' shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,1)]';
+                        if (isLeftSpouse) splitMod = '!border-r-0';
+                        if (isLeftSpouse) badge = `<div class="absolute -right-[15px] top-1/2 -translate-y-1/2 bg-white dark:bg-gray-900 border-2 border-gray-900 dark:border-white w-[30px] h-[30px] flex items-center justify-center z-50 font-bold">+</div>`;
+                        photoClass = 'rounded-none border-2 border-gray-900 dark:border-white bg-gray-100';
+                    } 
+                    else if (isElegant) {
+                        fontClass = 'font-serif';
+                        nodeClass = 'bg-[#faf9f6] dark:bg-[#2a2421] border border-[#d4c4a8] dark:border-[#4a3b32] rounded-lg shadow-lg';
+                        if (isSelected) nodeClass += ' ring-2 ring-[#d4c4a8] dark:ring-[#a8987b]';
+                        if (isLeftSpouse) splitMod = '!rounded-r-none !border-r-0';
+                        if (isRightSpouse) splitMod = '!rounded-l-none';
+                        if (isLeftSpouse) badge = `<div class="absolute -right-[15px] top-1/2 -translate-y-1/2 bg-[#faf9f6] dark:bg-[#2a2421] border border-[#d4c4a8] dark:border-[#4a3b32] rounded-full w-[30px] h-[30px] flex items-center justify-center z-50 shadow-md"><i class="fas fa-link text-[#a8987b] text-[10px]"></i></div>`;
+                        photoClass = 'rounded-full border border-[#d4c4a8] dark:border-[#4a3b32] shadow-sm bg-white p-0.5';
+                    }
+                    else if (isMidnight) {
+                        fontClass = 'font-sans';
+                        nodeClass = 'bg-gradient-to-br from-blue-900 to-indigo-900 text-white border border-blue-400 rounded-2xl shadow-xl';
+                        if (isSelected) nodeClass += ' ring-4 ring-blue-400 shadow-2xl';
+                        if (isLeftSpouse) splitMod = 'split-left';
+                        if (isRightSpouse) splitMod = 'split-right';
+                        if (isLeftSpouse) badge = `<div class="absolute -right-[15px] top-1/2 -translate-y-1/2 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-full w-[30px] h-[30px] flex items-center justify-center z-50 shadow-lg"><i class="fas fa-star text-white text-[10px]"></i></div>`;
+                        photoClass = 'rounded-full border-2 border-blue-400 bg-blue-800';
+                    }
+                    else if (isForest) {
+                        fontClass = 'font-sans';
+                        nodeClass = 'bg-gradient-to-br from-green-800 to-emerald-700 text-white border border-green-500 rounded-xl shadow-xl';
+                        if (isSelected) nodeClass += ' ring-4 ring-green-400 shadow-2xl';
+                        if (isLeftSpouse) splitMod = 'split-left';
+                        if (isRightSpouse) splitMod = 'split-right';
+                        if (isLeftSpouse) badge = `<div class="absolute -right-[15px] top-1/2 -translate-y-1/2 bg-gradient-to-br from-green-500 to-emerald-500 rounded-full w-[30px] h-[30px] flex items-center justify-center z-50 shadow-lg"><i class="fas fa-leaf text-white text-[10px]"></i></div>`;
+                        photoClass = 'rounded-full border-2 border-green-500 bg-green-700';
+                    }
+                    else { // Classic
+                        fontClass = 'font-sans';
+                        nodeClass = 'bg-white/95 dark:bg-gray-800/95 backdrop-blur-md rounded-2xl ring-1 ring-gray-200 dark:ring-gray-700 shadow-sm';
+                        if (isSelected) nodeClass += ' ring-2 ring-indigo-500 shadow-xl shadow-indigo-500/20 bg-indigo-50/80 dark:bg-indigo-900/30';
+                        if (isLeftSpouse) splitMod = 'split-left';
+                        if (isRightSpouse) splitMod = 'split-right';
+                        if (isLeftSpouse) badge = `<div class="absolute -right-[15px] top-1/2 -translate-y-1/2 bg-white dark:bg-gray-800 border-2 border-pink-400 rounded-full w-[30px] h-[30px] flex items-center justify-center z-50 shadow-md"><i class="fas fa-heart text-pink-500 text-[11px]"></i></div>`;
+                        photoClass = 'rounded-full shadow-inner border border-gray-200 dark:border-gray-600 bg-gray-100';
+                    }
+
+                    if (!isSelected && kinship[person.id] && kinship[person.id]!=='Self') {
+                        if (state.nodeStyle==='classic') nodeClass += ' ring-2 ring-indigo-300 dark:ring-indigo-700';
+                        if (isMidnight) nodeClass += ' ring-2 ring-blue-300';
+                        if (isForest) nodeClass += ' ring-2 ring-green-300';
+                    }
+
+                    const genderColor = person.gender==='male' ? 
+                        (isMidnight || isForest ? 'bg-blue-500/30 text-white' : 'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300 ring-1 ring-sky-200') : 
+                        person.gender==='female' ? 
+                        (isMidnight || isForest ? 'bg-pink-500/30 text-white' : 'bg-pink-100 text-pink-700 dark:bg-pink-900/50 dark:text-pink-300 ring-1 ring-pink-200') : 
+                        (isMidnight || isForest ? 'bg-gray-500/30 text-white' : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 ring-1 ring-gray-200');
+
+                    const photoHtml = person.photo ? 
+                        `<img src="${person.photo}" class="w-full h-full object-cover ${isElegant?'rounded-full':(isBrutal?'rounded-none':'rounded-full')}">` : 
+                        `<i class="fas fa-user text-${isMidnight||isForest?'white':'gray-400'} text-xl"></i>`;
+                    
+                    const deadMarker = !person.isAlive ? 
+                        `<div class="absolute top-2 right-2 ${isMidnight||isForest?'text-gray-300':'text-gray-400 dark:text-gray-500'}" title="Deceased"><i class="fas fa-ribbon text-[10px]"></i></div>` : '';
+                    
+                    const kinLabel = (kinship[person.id] && person.id !== state.selectedId) ? 
+                        `<div class="absolute -top-3 left-1/2 -translate-x-1/2 ${isMidnight?'bg-blue-600':isForest?'bg-green-600':'bg-indigo-600 dark:bg-indigo-500'} text-white text-[10px] uppercase font-bold px-3 py-0.5 rounded-full shadow-md whitespace-nowrap z-50 tracking-wider">${kinship[person.id]}</div>` : '';
+
+                    nodesHTML += `<div class="node-element absolute top-0 left-0 transition-all duration-300 cursor-pointer print:!ring-gray-300 print:!shadow-none group ${fontClass} ${nodeClass} ${splitMod}" 
+                                    style="transform:translate(${person.position.x}px,${person.position.y}px); width:${NODE_WIDTH}px; height:${NODE_HEIGHT}px; z-index:${isSelected?100:10}" 
+                                    data-id="${person.id}">
                         ${kinLabel} ${badge} ${deadMarker}
                         <div class="flex items-center gap-3.5 p-3.5 w-full h-full pointer-events-none">
-                            <div class="w-[60px] h-[60px] overflow-hidden flex items-center justify-center shrink-0 ${photoClass}">${photo}</div>
+                            <div class="w-[60px] h-[60px] overflow-hidden flex items-center justify-center shrink-0 ${photoClass}">${photoHtml}</div>
                             <div class="flex flex-col justify-center overflow-hidden flex-1">
-                                <h3 class="font-bold text-gray-900 dark:text-white truncate text-[16px] leading-tight mb-1.5">${person.name || 'Unknown'}</h3>
+                                <h3 class="font-bold ${isMidnight||isForest?'text-white':'text-gray-900 dark:text-white'} truncate text-[16px] leading-tight mb-1.5">${person.name || 'Unknown'}</h3>
                                 <div class="flex items-center gap-2 flex-wrap">
-                                    <span class="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded ${gColor}">${person.gender}</span>
-                                    <span class="text-[10px] text-gray-500 dark:text-gray-400 font-semibold">${calcAgeSpan(person)}</span>
+                                    <span class="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded ${genderColor}">${person.gender}</span>
+                                    <span class="text-[10px] ${isMidnight||isForest?'text-gray-300':'text-gray-500 dark:text-gray-400'} font-semibold">${calcAgeSpan(person)}</span>
                                 </div>
                             </div>
                         </div>
                         <div class="absolute inset-0 pointer-events-none print:hidden">
-                            <button class="action-btn pointer-events-auto absolute -top-4 left-1/2 transform -translate-x-1/2 w-8 h-8 bg-white dark:bg-gray-700 rounded-full shadow-lg border border-gray-200 dark:border-gray-600 flex items-center justify-center text-brand-600 hover:bg-brand-50" data-action="parent" title="Add Parent"><i class="fas fa-plus text-sm"></i></button>
-                            <button class="action-btn pointer-events-auto absolute -bottom-4 left-1/2 transform -translate-x-1/2 w-8 h-8 bg-white dark:bg-gray-700 rounded-full shadow-lg border border-gray-200 dark:border-gray-600 flex items-center justify-center text-green-600 hover:bg-green-50" data-action="child" title="Add Child"><i class="fas fa-plus text-sm"></i></button>
-                            ${!person.spouse ? `<button class="action-btn pointer-events-auto absolute top-1/2 -right-4 transform -translate-y-1/2 w-8 h-8 bg-white dark:bg-gray-700 rounded-full shadow-lg border border-gray-200 dark:border-gray-600 flex items-center justify-center text-pink-600 hover:bg-pink-50" data-action="spouse" title="Add Spouse"><i class="fas fa-plus text-sm"></i></button>` : ''}
+                            <button class="action-btn pointer-events-auto absolute -top-4 left-1/2 -translate-x-1/2 w-8 h-8 bg-white dark:bg-gray-700 rounded-full shadow-lg border border-gray-200 dark:border-gray-600 flex items-center justify-center text-indigo-600 hover:bg-indigo-50 transition-all hover:scale-110" data-action="parent" title="Add Parent (P)">
+                                <i class="fas fa-plus text-sm"></i>
+                            </button>
+                            <button class="action-btn pointer-events-auto absolute -bottom-4 left-1/2 -translate-x-1/2 w-8 h-8 bg-white dark:bg-gray-700 rounded-full shadow-lg border border-gray-200 dark:border-gray-600 flex items-center justify-center text-green-600 hover:bg-green-50 transition-all hover:scale-110" data-action="child" title="Add Child (C)">
+                                <i class="fas fa-plus text-sm"></i>
+                            </button>
+                            ${!person.spouse ? 
+                                `<button class="action-btn pointer-events-auto absolute top-1/2 -right-4 -translate-y-1/2 w-8 h-8 bg-white dark:bg-gray-700 rounded-full shadow-lg border border-gray-200 dark:border-gray-600 flex items-center justify-center text-pink-600 hover:bg-pink-50 transition-all hover:scale-110" data-action="spouse" title="Add Spouse (S)">
+                                    <i class="fas fa-plus text-sm"></i>
+                                </button>` : ''}
                         </div>
                     </div>`;
-            });
+                });
 
-            els.edgesGroup.innerHTML = edgesHTML; els.nodesLayer.innerHTML = nodesHTML;
-            updateMinimap();
-        }
+                els.edgesGroup.innerHTML = edgesHTML;
+                els.nodesLayer.innerHTML = nodesHTML;
+                updateMinimap();
+                updateStats();
+            };
 
-        function updateMinimap() {
-            if(!els.minimapContainer) return;
-            const activeNodes = Object.values(state.people).filter(n => isNodeInFocus(n.id));
-            if(activeNodes.length === 0) { els.minimapContainer.classList.add('hidden'); return; }
-            els.minimapContainer.classList.remove('hidden');
-
-            const box = getBoundingBox(activeNodes);
-            box.minX -= 500; box.minY -= 500; box.width += 1000; box.height += 1000;
-            
-            const mmInner = els.minimapInner.getBoundingClientRect();
-            const scaleX = mmInner.width / box.width; const scaleY = mmInner.height / box.height;
-            const mmScale = Math.min(scaleX, scaleY);
-
-            let mmNodesHTML = '';
-            activeNodes.forEach(p => {
-                const x = (p.position.x - box.minX) * mmScale;
-                const y = (p.position.y - box.minY) * mmScale;
-                const w = NODE_WIDTH * mmScale; const h = NODE_HEIGHT * mmScale;
-                mmNodesHTML += `<div class="absolute bg-gray-400 dark:bg-gray-500 rounded-sm opacity-50" style="left:${x}px; top:${y}px; width:${w}px; height:${h}px"></div>`;
-            });
-            els.minimapNodes.innerHTML = mmNodesHTML;
-
-            const cRect = els.canvasContainer.getBoundingClientRect();
-            const vx = (-state.transform.x / state.transform.scale - box.minX) * mmScale;
-            const vy = (-state.transform.y / state.transform.scale - box.minY) * mmScale;
-            const vw = (cRect.width / state.transform.scale) * mmScale;
-            const vh = (cRect.height / state.transform.scale) * mmScale;
-
-            els.minimapViewport.style.left = `${vx}px`; els.minimapViewport.style.top = `${vy}px`;
-            els.minimapViewport.style.width = `${vw}px`; els.minimapViewport.style.height = `${vh}px`;
-        }
-
-        function updateSidebar() {
-            if (state.selectedId && state.people[state.selectedId]) {
-                const p = state.people[state.selectedId];
-                els.sidebarContent.classList.remove('hidden'); els.sidebarEmpty.classList.add('hidden');
-                els.sidebar.classList.remove('translate-x-full');
-
-                // Don't overwrite if user is currently typing in these fields
-                if (document.activeElement !== els.inpName) els.inpName.value = p.name;
-                if (document.activeElement !== els.selGender) els.selGender.value = p.gender;
-                if (document.activeElement !== els.chkIsAlive) els.chkIsAlive.checked = p.isAlive;
-                if (document.activeElement !== els.inpBirthDate) els.inpBirthDate.value = p.birthDate;
-                if (document.activeElement !== els.inpDeathDate) els.inpDeathDate.value = p.deathDate || '';
-                if (document.activeElement !== els.inpBirthPlace) els.inpBirthPlace.value = p.birthPlace || '';
-                if (document.activeElement !== els.inpNotes) els.inpNotes.value = p.notes;
-                
-                els.deathFieldsGroup.style.opacity = p.isAlive ? '0.3' : '1';
-                els.deathFieldsGroup.style.pointerEvents = p.isAlive ? 'none' : 'auto';
-                if(els.lifespanDisplay) els.lifespanDisplay.innerText = calcAgeSpan(p);
-
-                const getImg = p => p.photo ? `<img src="${p.photo}" class="w-full h-full object-cover">` : `<i class="fas fa-camera text-gray-400 text-2xl"></i>`;
-                els.sidebarPhotoContainer.innerHTML = `${getImg(p)}<label class="absolute inset-0 bg-black/50 hidden group-hover:flex flex-col items-center justify-center cursor-pointer backdrop-blur-sm text-white transition-all"><i class="fas fa-upload mb-1"></i><span class="text-[10px] font-bold uppercase tracking-wider">Change</span><input type="file" accept="image/*" class="hidden" id="inpPhotoUpload"></label>`;
-                els.btnRemovePhoto.classList.toggle('hidden', !p.photo);
-
-                const photoUpload = $('inpPhotoUpload');
-                if (photoUpload) {
-                    photoUpload.addEventListener('change', (e) => {
-                        const f = e.target.files[0]; if(!f) return;
-                        if(f.size > 2*1024*1024) return showToast("Max 2MB", "error");
-                        const r = new FileReader(); r.onload = ev => { const nP=JSON.parse(JSON.stringify(state.people)); nP[state.selectedId].photo=ev.target.result; setPeople(nP); updateHistory(nP); updateSidebar(); }; r.readAsDataURL(f);
-                    });
+            const updateMinimap = () => {
+                if (!els.minimapContainer) return;
+                const active = Object.values(state.people).filter(n => isNodeInFocus(n.id));
+                if (!active.length) { 
+                    els.minimapContainer.classList.add('hidden'); 
+                    return; 
                 }
+                els.minimapContainer.classList.remove('hidden');
+                
+                const box = getBoundingBox(active);
+                box.minX -= 500; 
+                box.minY -= 500; 
+                box.width += 1000; 
+                box.height += 1000;
+                
+                const mmRect = els.minimapInner.getBoundingClientRect();
+                const scaleX = mmRect.width / box.width;
+                const scaleY = mmRect.height / box.height;
+                const mmScale = Math.min(scaleX, scaleY);
+                
+                let nodesHtml = '';
+                active.forEach(p => {
+                    const x = (p.position.x - box.minX) * mmScale;
+                    const y = (p.position.y - box.minY) * mmScale;
+                    nodesHtml += `<div class="absolute bg-gray-400 dark:bg-gray-500 rounded-sm opacity-50" 
+                                    style="left:${x}px; top:${y}px; width:${NODE_WIDTH*mmScale}px; height:${NODE_HEIGHT*mmScale}px"></div>`;
+                });
+                els.minimapNodes.innerHTML = nodesHtml;
+                
+                const cRect = els.canvasContainer.getBoundingClientRect();
+                const vx = (-state.transform.x/state.transform.scale - box.minX) * mmScale;
+                const vy = (-state.transform.y/state.transform.scale - box.minY) * mmScale;
+                const vw = (cRect.width / state.transform.scale) * mmScale;
+                const vh = (cRect.height / state.transform.scale) * mmScale;
+                
+                els.minimapViewport.style.left = vx + 'px';
+                els.minimapViewport.style.top = vy + 'px';
+                els.minimapViewport.style.width = vw + 'px';
+                els.minimapViewport.style.height = vh + 'px';
+            };
 
-                const linkNode = (id) => `<span class="font-semibold text-brand-600 dark:text-brand-400 cursor-pointer hover:underline" onclick="selectNode('${id}')">${state.people[id]?.name || 'Unknown'}</span>`;
-                window.selectNode = (id) => { state.selectedId = id; render(); updateSidebar(); fitToScreen(true); };
+            const updateSidebar = () => {
+                if (state.selectedId && state.people[state.selectedId]) {
+                    const p = state.people[state.selectedId];
+                    els.sidebarContent.classList.remove('hidden');
+                    els.sidebarEmpty.classList.add('hidden');
+                    els.sidebar.classList.remove('translate-x-full');
 
-                els.sidebarTiesList.innerHTML = `
-                    <li class="flex gap-2 items-center"><span class="text-gray-400 w-16 text-[11px] font-bold uppercase tracking-wider">Parents</span> <span class="text-gray-800 dark:text-gray-200 text-sm truncate flex-1">${(p.parents||[]).map(linkNode).join(', ') || '—'}</span></li>
-                    <li class="flex gap-2 items-center"><span class="text-gray-400 w-16 text-[11px] font-bold uppercase tracking-wider">Children</span> <span class="text-gray-800 dark:text-gray-200 text-sm truncate flex-1">${(p.children||[]).map(linkNode).join(', ') || '—'}</span></li>
-                    <li class="flex gap-2 items-center"><span class="text-gray-400 w-16 text-[11px] font-bold uppercase tracking-wider">Spouse</span> <span class="text-gray-800 dark:text-gray-200 text-sm truncate flex-1">${p.spouse ? linkNode(p.spouse) : '—'}</span></li>
-                `;
-            } else {
-                els.sidebarContent.classList.add('hidden'); els.sidebarEmpty.classList.remove('hidden'); els.sidebar.classList.add('translate-x-full');
+                    if (document.activeElement !== els.inpName) els.inpName.value = p.name;
+                    if (document.activeElement !== els.selGender) els.selGender.value = p.gender;
+                    if (document.activeElement !== els.chkIsAlive) els.chkIsAlive.checked = p.isAlive;
+                    if (document.activeElement !== els.inpBirthDate) els.inpBirthDate.value = p.birthDate;
+                    if (document.activeElement !== els.inpDeathDate) els.inpDeathDate.value = p.deathDate || '';
+                    if (document.activeElement !== els.inpBirthPlace) els.inpBirthPlace.value = p.birthPlace || '';
+                    if (document.activeElement !== els.inpNotes) els.inpNotes.value = p.notes;
+
+                    els.deathFieldsGroup.style.opacity = p.isAlive ? '0.3' : '1';
+                    els.deathFieldsGroup.style.pointerEvents = p.isAlive ? 'none' : 'auto';
+                    
+                    if (els.lifespanDisplay) els.lifespanDisplay.innerText = calcAgeSpan(p);
+                    
+                    if (p.birthDate) {
+                        const birth = new Date(p.birthDate).getFullYear();
+                        if (!p.isAlive && p.deathDate) {
+                            const death = new Date(p.deathDate).getFullYear();
+                            if (els.ageDisplay) els.ageDisplay.innerText = `Age: ${death - birth} years`;
+                        } else if (p.isAlive) {
+                            const age = new Date().getFullYear() - birth;
+                            if (els.ageDisplay) els.ageDisplay.innerText = `Age: ${age} years`;
+                        }
+                    } else {
+                        if (els.ageDisplay) els.ageDisplay.innerText = '';
+                    }
+
+                    const imgHtml = p.photo ? 
+                        `<img src="${p.photo}" class="w-full h-full object-cover">` : 
+                        `<i class="fas fa-user text-gray-400 text-4xl"></i>`;
+                    
+                    els.sidebarPhotoContainer.innerHTML = imgHtml + 
+                        `<label class="absolute inset-0 bg-black/0 hover:bg-black/40 transition-all flex items-center justify-center cursor-pointer">
+                            <i class="fas fa-camera text-white opacity-0 hover:opacity-100 transition-all text-xl"></i>
+                            <input type="file" accept="image/*" class="hidden" id="inpPhotoUpload">
+                        </label>`;
+                    
+                    els.btnRemovePhoto.classList.toggle('hidden', !p.photo);
+
+                    const photoUpload = $('inpPhotoUpload');
+                    if (photoUpload) {
+                        photoUpload.onchange = (e) => {
+                            const file = e.target.files[0];
+                            if (!file) return;
+                            if (file.size > 5*1024*1024) return showToast("Max 5MB", "error");
+                            
+                            const r = new FileReader();
+                            r.onload = ev => {
+                                const nP = JSON.parse(JSON.stringify(state.people));
+                                nP[state.selectedId].photo = ev.target.result;
+                                nP[state.selectedId].updatedAt = new Date().toISOString();
+                                setPeople(nP);
+                                updateHistory(nP);
+                                updateSidebar();
+                                showToast("Photo updated", "success");
+                            };
+                            r.readAsDataURL(file);
+                        };
+                    }
+
+                    const linkNode = (id) => `<span class="font-semibold text-indigo-600 dark:text-indigo-400 cursor-pointer hover:underline hover:scale-105 inline-block transition" onclick="window.selectNode('${id}')">${state.people[id]?.name || 'Unknown'}</span>`;
+                    
+                    window.selectNode = (id) => { 
+                        state.selectedId = id; 
+                        render(); 
+                        updateSidebar(); 
+                    };
+
+                    const parents = (p.parents || []).map(linkNode).join(', ') || '—';
+                    const children = (p.children || []).map(linkNode).join(', ') || '—';
+                    const spouse = p.spouse ? linkNode(p.spouse) : '—';
+                    
+                    els.sidebarTiesList.innerHTML = `
+                        <li class="flex gap-2 items-center p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition">
+                            <span class="text-gray-400 w-16 text-[11px] font-bold uppercase tracking-wider">Parents</span> 
+                            <span class="text-gray-800 dark:text-gray-200 text-sm truncate flex-1">${parents}</span>
+                        </li>
+                        <li class="flex gap-2 items-center p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition">
+                            <span class="text-gray-400 w-16 text-[11px] font-bold uppercase tracking-wider">Children</span> 
+                            <span class="text-gray-800 dark:text-gray-200 text-sm truncate flex-1">${children}</span>
+                        </li>
+                        <li class="flex gap-2 items-center p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition">
+                            <span class="text-gray-400 w-16 text-[11px] font-bold uppercase tracking-wider">Spouse</span> 
+                            <span class="text-gray-800 dark:text-gray-200 text-sm truncate flex-1">${spouse}</span>
+                        </li>
+                    `;
+                    
+                    const totalTies = (p.parents?.length || 0) + (p.children?.length || 0) + (p.spouse ? 1 : 0);
+                    if (els.tieCount) els.tieCount.innerText = totalTies;
+                    
+                } else {
+                    els.sidebarContent.classList.add('hidden');
+                    els.sidebarEmpty.classList.remove('hidden');
+                    els.sidebar.classList.add('translate-x-full');
+                }
+            };
+
+            // ---------- EVENT BINDINGS ----------
+            const bindInput = (el, key) => {
+                if (!el) return;
+                el.addEventListener('input', e => {
+                    if (state.selectedId && state.people[state.selectedId]) {
+                        const nP = JSON.parse(JSON.stringify(state.people));
+                        nP[state.selectedId][key] = el.type === 'checkbox' ? el.checked : e.target.value;
+                        nP[state.selectedId].updatedAt = new Date().toISOString();
+                        state.people = nP;
+                        render();
+                        updateSidebar();
+                    }
+                });
+                el.addEventListener('change', () => { 
+                    updateHistory(state.people); 
+                });
+            };
+            
+            bindInput(els.inpName, 'name');
+            bindInput(els.selGender, 'gender');
+            bindInput(els.chkIsAlive, 'isAlive');
+            bindInput(els.inpBirthDate, 'birthDate');
+            bindInput(els.inpDeathDate, 'deathDate');
+            bindInput(els.inpBirthPlace, 'birthPlace');
+            bindInput(els.inpNotes, 'notes');
+
+            els.btnRemovePhoto.addEventListener('click', () => {
+                const nP = JSON.parse(JSON.stringify(state.people));
+                nP[state.selectedId].photo = '';
+                nP[state.selectedId].updatedAt = new Date().toISOString();
+                setPeople(nP);
+                updateHistory(nP);
+                updateSidebar();
+                showToast("Photo removed", "info");
+            });
+
+            els.btnDeletePerson.addEventListener('click', () => {
+                if (!confirm("Delete this node permanently? This action cannot be undone.")) return;
+                
+                const nP = JSON.parse(JSON.stringify(state.people));
+                const p = nP[state.selectedId];
+                
+                // Remove references
+                (p.parents || []).forEach(pid => { 
+                    if (nP[pid]) {
+                        nP[pid].children = (nP[pid].children||[]).filter(c => c !== state.selectedId);
+                    }
+                });
+                
+                (p.children || []).forEach(cid => { 
+                    if (nP[cid]) {
+                        nP[cid].parents = (nP[cid].parents||[]).filter(pr => pr !== state.selectedId);
+                    }
+                });
+                
+                if (p.spouse && nP[p.spouse]) {
+                    nP[p.spouse].spouse = '';
+                }
+                
+                delete nP[state.selectedId];
+                setPeople(nP);
+                updateHistory(nP);
+                
+                const oldSelected = state.selectedId;
+                state.selectedId = null;
+                if (state.focusId === oldSelected) state.focusId = null;
+                
+                render();
+                updateSidebar();
+                showToast("Node deleted", "success");
+            });
+
+            els.btnDuplicatePerson.addEventListener('click', () => {
+                if (!state.selectedId) return;
+                
+                const original = state.people[state.selectedId];
+                const newId = generateId();
+                const nP = JSON.parse(JSON.stringify(state.people));
+                
+                // Create duplicate with offset position
+                nP[newId] = {
+                    ...original,
+                    id: newId,
+                    name: original.name + ' (Copy)',
+                    position: {
+                        x: original.position.x + 50,
+                        y: original.position.y + 50
+                    },
+                    parents: [],
+                    children: [],
+                    spouse: '',
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
+                };
+                
+                setPeople(nP);
+                updateHistory(nP);
+                state.selectedId = newId;
+                render();
+                updateSidebar();
+                showToast("Node duplicated", "success");
+            });
+
+            els.btnCloseSidebar.addEventListener('click', () => { 
+                state.selectedId = null; 
+                render(); 
+                updateSidebar(); 
+            });
+
+            els.btnFocusNode.addEventListener('click', () => {
+                if (state.focusId === state.selectedId) { 
+                    state.focusId = null; 
+                    showToast("Focus cleared", "info");
+                } else { 
+                    state.focusId = state.selectedId; 
+                    showToast("Branch focused", "success");
+                }
+                render();
+                fitToScreen();
+            });
+            
+            els.focusIndicator.addEventListener('click', () => { 
+                state.focusId = null; 
+                render(); 
+                fitToScreen(); 
+                showToast("Focus cleared", "info"); 
+            });
+
+            // header actions
+            els.searchInput.addEventListener('input', e => { 
+                state.searchQuery = e.target.value; 
+                render(); 
+            });
+            
+            els.btnHeaderAdd.addEventListener('click', () => handleSmartAdd(null, 'root'));
+            els.btnCreateFirst.addEventListener('click', () => handleSmartAdd(null, 'root'));
+            els.btnAutoLayout.addEventListener('click', performAutoLayout);
+
+            els.btnUndo.addEventListener('click', () => {
+                if (state.historyIndex > 0) {
+                    state.historyIndex--;
+                    setPeople(JSON.parse(JSON.stringify(state.history[state.historyIndex])));
+                    showToast("Undo", "info");
+                }
+            });
+            
+            els.btnRedo.addEventListener('click', () => {
+                if (state.historyIndex < state.history.length-1) {
+                    state.historyIndex++;
+                    setPeople(JSON.parse(JSON.stringify(state.history[state.historyIndex])));
+                    showToast("Redo", "info");
+                }
+            });
+
+            // theme
+            els.btnThemeToggle.addEventListener('click', () => {
+                state.theme = state.theme === 'light' ? 'dark' : 'light';
+                localStorage.setItem('nexusTheme', state.theme);
+                if (state.theme === 'dark') { 
+                    document.documentElement.classList.add('dark'); 
+                    els.themeIcon.className = 'fas fa-sun'; 
+                } else { 
+                    document.documentElement.classList.remove('dark'); 
+                    els.themeIcon.className = 'fas fa-moon'; 
+                }
+                render();
+                showToast(`${state.theme === 'dark' ? '🌙 Dark' : '☀️ Light'} mode`, "info");
+            });
+
+            document.querySelectorAll('.theme-option').forEach(el => {
+                el.addEventListener('click', (e) => {
+                    const t = e.target.closest('.theme-option');
+                    if (t) {
+                        state.nodeStyle = t.dataset.theme;
+                        localStorage.setItem('nexusNodeStyle', state.nodeStyle);
+                        render();
+                        showToast(`Theme: ${state.nodeStyle}`, "success");
+                    }
+                });
+            });
+
+            // zoom / fit
+            els.btnFitScreen.addEventListener('click', () => fitToScreen(true));
+            els.btnZoomIn.addEventListener('click', () => { 
+                state.transform.scale = Math.min(3, state.transform.scale * 1.3); 
+                applyTransform(true); 
+            });
+            els.btnZoomOut.addEventListener('click', () => { 
+                state.transform.scale = Math.max(0.05, state.transform.scale * 0.7); 
+                applyTransform(true); 
+            });
+
+            // export
+            els.btnPrint.addEventListener('click', () => {
+                window.print();
+                showToast("Preparing print...", "info");
+            });
+            
+            els.btnExportJSON.addEventListener('click', () => {
+                const data = JSON.stringify(state.people, null, 2);
+                const blob = new Blob([data], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `nexus-tree-${new Date().toISOString().slice(0,10)}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+                showToast("JSON exported", "success");
+            });
+            
+            els.btnExportSVG = $('btnExportSVG');
+            if (els.btnExportSVG) {
+                els.btnExportSVG.addEventListener('click', async () => {
+                    showToast("Generating SVG...", "info");
+                    
+                    // Create SVG from canvas
+                    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                    const box = getBoundingBox(Object.values(state.people));
+                    const padding = 50;
+                    
+                    svg.setAttribute('width', box.width + padding*2);
+                    svg.setAttribute('height', box.height + padding*2);
+                    svg.setAttribute('viewBox', `0 0 ${box.width + padding*2} ${box.height + padding*2}`);
+                    
+                    // Add background
+                    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                    rect.setAttribute('width', '100%');
+                    rect.setAttribute('height', '100%');
+                    rect.setAttribute('fill', state.theme === 'dark' ? '#0f172a' : '#f8fafc');
+                    svg.appendChild(rect);
+                    
+                    // Copy edges from existing SVG
+                    const edges = els.edgesGroup.cloneNode(true);
+                    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                    g.setAttribute('transform', `translate(${padding - box.minX}, ${padding - box.minY})`);
+                    
+                    // Clone edge paths
+                    edges.querySelectorAll('path').forEach(path => {
+                        const newPath = path.cloneNode(true);
+                        g.appendChild(newPath);
+                    });
+                    
+                    svg.appendChild(g);
+                    
+                    // Convert to string and download
+                    const serializer = new XMLSerializer();
+                    const svgString = serializer.serializeToString(svg);
+                    const blob = new Blob([svgString], { type: 'image/svg+xml' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `nexus-tree-${Date.now()}.svg`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    
+                    showToast("SVG exported", "success");
+                });
             }
-        }
-
-        // ==========================================
-        // 5. EVENT LISTENERS & MULTI-TOUCH
-        // ==========================================
-        
-        // --- Pan & Zoom (Desktop) ---
-        els.canvasContainer.addEventListener('wheel', (e) => {
-            if (e.target.closest('.no-pan') || e.target.closest('aside')) return;
-            e.preventDefault();
-            const zoomSens = 0.002;
-            let newScale = Math.min(Math.max(0.05, state.transform.scale * (1 - e.deltaY * zoomSens)), 3);
-            const r = els.canvasContainer.getBoundingClientRect();
-            state.transform = { x: (e.clientX - r.left) - ((e.clientX - r.left) - state.transform.x) * (newScale / state.transform.scale), y: (e.clientY - r.top) - ((e.clientY - r.top) - state.transform.y) * (newScale / state.transform.scale), scale: newScale };
-            applyTransform();
-        }, {passive: false});
-
-        // --- Pointer Events for Canvas Panning (Mouse + Touch Support) ---
-        let isPanning = false, startTx=0, startTy=0;
-        els.canvasContainer.addEventListener('pointerdown', (e) => {
-            if (e.button !== 0 && e.pointerType === 'mouse') return;
-            if (e.target.closest('.no-pan') || e.target.closest('.node-element') || e.target.closest('aside')) return;
-            isPanning = true; const sx = e.clientX, sy = e.clientY; startTx = state.transform.x; startTy = state.transform.y;
-            els.canvasContainer.setPointerCapture(e.pointerId);
             
-            const onMove = me => { if(isPanning) { state.transform.x = startTx + (me.clientX - sx); state.transform.y = startTy + (me.clientY - sy); applyTransform(); }};
-            const onUp = (upEvent) => { isPanning = false; els.canvasContainer.releasePointerCapture(upEvent.pointerId); window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); };
-            window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onUp);
-        });
+            els.fileImport.addEventListener('change', e => {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                const r = new FileReader();
+                r.onload = ev => {
+                    try {
+                        const imported = sanitizeData(JSON.parse(ev.target.result));
+                        setPeople(imported);
+                        updateHistory(imported, true);
+                        showToast("Import successful", "success");
+                        setTimeout(() => fitToScreen(), 100);
+                    } catch (err) { 
+                        showToast("Invalid JSON file", "error"); 
+                    }
+                };
+                r.readAsText(file);
+                e.target.value = ''; // Reset input
+            });
 
-        // --- Node Interaction (Pointer Events - Mouse + Touch!) ---
-        els.nodesLayer.addEventListener('pointerdown', (e) => {
-            if (e.button !== 0 && e.pointerType === 'mouse') return;
-            const actionBtn = e.target.closest('.action-btn');
-            const nodeEl = e.target.closest('.node-element');
+            // FIXED: Perfect image export
+            els.btnExportImage.addEventListener('click', async () => {
+                if (Object.keys(state.people).length === 0) {
+                    return showToast("Tree is empty", "error");
+                }
+                
+                showToast("Generating high-res image...", "info", 2000);
+                
+                // Save current state
+                const originalSelected = state.selectedId;
+                const originalTransform = { ...state.transform };
+                const originalCanvasStyle = els.canvas.style.cssText;
+                
+                // Deselect nodes and hide UI elements
+                state.selectedId = null;
+                render();
+                
+                // Calculate exact bounding box with padding
+                const nodes = Object.values(state.people);
+                const box = getBoundingBox(nodes);
+                const padding = 100;
+                
+                const targetWidth = Math.ceil(box.width + padding * 2);
+                const targetHeight = Math.ceil(box.height + padding * 2);
+                
+                // Position canvas to show entire tree
+                els.canvas.style.transition = 'none';
+                els.canvas.style.width = targetWidth + 'px';
+                els.canvas.style.height = targetHeight + 'px';
+                els.canvas.style.transform = `translate(${-box.minX + padding}px, ${-box.minY + padding}px) scale(1)`;
+                
+                // Wait for DOM update and any pending renders
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                try {
+                    // Use html-to-image with proper configuration
+                    const dataUrl = await htmlToImage.toPng(els.canvas, {
+                        backgroundColor: state.theme === 'dark' ? '#0f172a' : '#f8fafc',
+                        width: targetWidth,
+                        height: targetHeight,
+                        pixelRatio: 2, // Retina quality
+                        skipAutoScale: true,
+                        quality: 1,
+                        cacheBust: true,
+                        style: {
+                            'transform': 'none',
+                            'transform-origin': 'top left'
+                        }
+                    });
+                    
+                    // Download
+                    const link = document.createElement('a');
+                    link.download = `nexus-tree-${new Date().toISOString().slice(0,10)}.png`;
+                    link.href = dataUrl;
+                    link.click();
+                    
+                    showToast("✨ Perfect image downloaded!", "success");
+                    
+                } catch (err) {
+                    console.error('Export error:', err);
+                    showToast("Export failed. Try JSON instead.", "error");
+                } finally {
+                    // Restore everything
+                    els.canvas.style.cssText = originalCanvasStyle;
+                    els.canvas.style.width = '100%';
+                    els.canvas.style.height = '100%';
+                    state.transform = originalTransform;
+                    state.selectedId = originalSelected;
+                    render();
+                    applyTransform(false);
+                }
+            });
+
+            // keyboard shortcuts
+            window.addEventListener('keydown', (e) => {
+                // Show keyboard hint
+                if (els.keyboardHint) {
+                    els.keyboardHint.classList.add('visible');
+                    clearTimeout(window.hintTimeout);
+                    window.hintTimeout = setTimeout(() => {
+                        els.keyboardHint.classList.remove('visible');
+                    }, 2000);
+                }
+                
+                // Undo/Redo
+                if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+                    e.preventDefault();
+                    if (e.shiftKey) {
+                        els.btnRedo.click();
+                    } else {
+                        els.btnUndo.click();
+                    }
+                }
+                
+                if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+                    e.preventDefault();
+                    els.btnRedo.click();
+                }
+                
+                // Fit view
+                if (e.key === ' ') {
+                    e.preventDefault();
+                    els.btnFitScreen.click();
+                }
+                
+                // Delete selected node
+                if (e.key === 'Delete' && state.selectedId) {
+                    els.btnDeletePerson.click();
+                }
+                
+                // Escape to close sidebar / deselect
+                if (e.key === 'Escape') {
+                    if (state.selectedId) {
+                        state.selectedId = null;
+                        render();
+                        updateSidebar();
+                    }
+                }
+                
+                // Quick add shortcuts when node selected
+                if (state.selectedId) {
+                    if (e.key === 'p' || e.key === 'P') {
+                        e.preventDefault();
+                        handleSmartAdd(state.selectedId, 'parent');
+                    }
+                    if (e.key === 'c' || e.key === 'C') {
+                        e.preventDefault();
+                        handleSmartAdd(state.selectedId, 'child');
+                    }
+                    if (e.key === 's' || e.key === 'S') {
+                        e.preventDefault();
+                        handleSmartAdd(state.selectedId, 'spouse');
+                    }
+                }
+                
+                // Auto layout
+                if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
+                    e.preventDefault();
+                    els.btnAutoLayout.click();
+                }
+            });
+
+            // pointer events for canvas pan
+            let isPanning = false, startX=0, startY=0, startTx=0, startTy=0;
             
-            if (actionBtn && nodeEl) { e.preventDefault(); e.stopPropagation(); return handleSmartAdd(nodeEl.dataset.id, actionBtn.dataset.action); }
-            if (nodeEl) {
-                e.preventDefault(); e.stopPropagation();
-                const id = nodeEl.dataset.id; const p = state.people[id];
+            els.canvasContainer.addEventListener('pointerdown', (e) => {
+                if (e.button !== 0 && e.pointerType==='mouse') return;
+                if (e.target.closest('.no-pan') || e.target.closest('.node-element') || e.target.closest('aside') || e.target.closest('button')) return;
+                
+                isPanning = true;
+                startX = e.clientX; 
+                startY = e.clientY;
+                startTx = state.transform.x; 
+                startTy = state.transform.y;
+                
+                els.canvasContainer.setPointerCapture(e.pointerId);
+                els.canvasContainer.classList.add('grabbing');
+
+                const onMove = (me) => {
+                    if (!isPanning) return;
+                    state.transform.x = startTx + (me.clientX - startX);
+                    state.transform.y = startTy + (me.clientY - startY);
+                    applyTransform();
+                };
+                
+                const onUp = (up) => {
+                    isPanning = false;
+                    els.canvasContainer.releasePointerCapture(up.pointerId);
+                    els.canvasContainer.classList.remove('grabbing');
+                    window.removeEventListener('pointermove', onMove);
+                    window.removeEventListener('pointerup', onUp);
+                };
+                
+                window.addEventListener('pointermove', onMove);
+                window.addEventListener('pointerup', onUp);
+            });
+
+            // node dragging via pointer
+            els.nodesLayer.addEventListener('pointerdown', (e) => {
+                if (e.button !== 0 && e.pointerType==='mouse') return;
+                
+                const actionBtn = e.target.closest('.action-btn');
+                const nodeEl = e.target.closest('.node-element');
+                
+                if (actionBtn && nodeEl) {
+                    e.preventDefault(); 
+                    e.stopPropagation();
+                    return handleSmartAdd(nodeEl.dataset.id, actionBtn.dataset.action);
+                }
+                
+                if (!nodeEl) return;
+                
+                e.preventDefault(); 
+                e.stopPropagation();
+                
+                const id = nodeEl.dataset.id;
+                const p = state.people[id];
+                
                 let spId = p.spouse, isSplit = false, spStart = null;
                 if (spId && state.people[spId]) {
                     spStart = { ...state.people[spId].position };
-                    if (p.position.y === spStart.y && Math.abs(Math.round(p.position.x - spStart.x)) === NODE_WIDTH) isSplit = true;
+                    if (p.position.y === spStart.y && Math.abs(Math.round(p.position.x - spStart.x)) === NODE_WIDTH) {
+                        isSplit = true;
+                    }
                 }
 
-                const sx = e.clientX, sy = e.clientY, start = { ...p.position }; let moved = false;
+                const sx = e.clientX, sy = e.clientY;
+                const startPos = { ...p.position };
+                let moved = false;
+                
                 nodeEl.setPointerCapture(e.pointerId);
 
-                const onMove = me => {
+                const onMove = (me) => {
                     moved = true;
-                    let nx = start.x + (me.clientX - sx) / state.transform.scale, ny = start.y + (me.clientY - sy) / state.transform.scale;
-                    nodeEl.style.transform = `translate(${nx}px, ${ny}px)`; state.people[id].position = { x: nx, y: ny };
-                    if (isSplit) {
-                        const snx = spStart.x + (nx - start.x), sny = spStart.y + (ny - start.y);
-                        state.people[spId].position = { x: snx, y: sny };
-                        const sEl = document.querySelector(`.node-element[data-id="${spId}"]`);
-                        if(sEl) sEl.style.transform = `translate(${snx}px, ${sny}px)`;
+                    let nx = startPos.x + (me.clientX - sx) / state.transform.scale;
+                    let ny = startPos.y + (me.clientY - sy) / state.transform.scale;
+                    
+                    // Snap to grid while holding shift
+                    if (me.shiftKey) {
+                        nx = Math.round(nx / 20) * 20;
+                        ny = Math.round(ny / 20) * 20;
                     }
-                    render(); // Live lines
+                    
+                    nodeEl.style.transform = `translate(${nx}px, ${ny}px)`;
+                    state.people[id].position = { x: nx, y: ny };
+                    
+                    if (isSplit) {
+                        const snx = spStart.x + (nx - startPos.x);
+                        const sny = spStart.y + (ny - startPos.y);
+                        state.people[spId].position = { x: snx, y: sny };
+                        const spEl = document.querySelector(`.node-element[data-id="${spId}"]`);
+                        if (spEl) spEl.style.transform = `translate(${snx}px, ${sny}px)`;
+                    }
+                    
+                    render(); // update edges live
                 };
+                
                 const onUp = (upEv) => {
                     nodeEl.releasePointerCapture(upEv.pointerId);
-                    window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp);
-                    if (moved) { setPeople(state.people); updateHistory(state.people); } 
-                    else { state.selectedId = id; render(); updateSidebar(); }
+                    window.removeEventListener('pointermove', onMove);
+                    window.removeEventListener('pointerup', onUp);
+                    
+                    if (moved) {
+                        // Update timestamps
+                        Object.keys(state.people).forEach(key => {
+                            if (state.people[key]) {
+                                state.people[key].updatedAt = new Date().toISOString();
+                            }
+                        });
+                        setPeople(state.people);
+                        updateHistory(state.people);
+                        showToast("Node moved", "info", 1000);
+                    } else {
+                        state.selectedId = id;
+                        render();
+                        updateSidebar();
+                    }
                 };
-                window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onUp);
-            }
-        });
-
-        // Click off
-        els.canvasContainer.addEventListener('click', (e) => {
-            if (e.target === els.canvasContainer || e.target === els.canvas || e.target.closest('svg')) { state.selectedId = null; render(); updateSidebar(); }
-        });
-
-        // --- Sidebar Logic ---
-        const bindInput = (el, key) => {
-            if(!el) return;
-            el.addEventListener('input', e => {
-                if (state.selectedId && state.people[state.selectedId]) {
-                    const nP = JSON.parse(JSON.stringify(state.people));
-                    nP[state.selectedId][key] = el.type === 'checkbox' ? el.checked : e.target.value;
-                    state.people = nP; render(); updateSidebar();
-                }
+                
+                window.addEventListener('pointermove', onMove);
+                window.addEventListener('pointerup', onUp);
             });
-            el.addEventListener('change', () => { saveToStorage(); updateHistory(state.people); });
-        };
-        bindInput(els.inpName, 'name'); bindInput(els.selGender, 'gender'); bindInput(els.chkIsAlive, 'isAlive');
-        bindInput(els.inpBirthDate, 'birthDate'); bindInput(els.inpDeathDate, 'deathDate'); bindInput(els.inpBirthPlace, 'birthPlace'); bindInput(els.inpNotes, 'notes');
 
-        els.btnRemovePhoto.addEventListener('click', () => { const nP=JSON.parse(JSON.stringify(state.people)); nP[state.selectedId].photo=''; setPeople(nP); updateHistory(nP); updateSidebar(); });
-        els.btnDeletePerson.addEventListener('click', () => {
-            if(!confirm("Eradicate this node? Links will break.")) return;
-            const nP = JSON.parse(JSON.stringify(state.people)), p = nP[state.selectedId];
-            (p.parents||[]).forEach(pid => { if(nP[pid]) nP[pid].children = (nP[pid].children||[]).filter(c => c !== state.selectedId); });
-            (p.children||[]).forEach(cid => { if(nP[cid]) nP[cid].parents = (nP[cid].parents||[]).filter(pr => pr !== state.selectedId); });
-            if(p.spouse && nP[p.spouse]) nP[p.spouse].spouse = '';
-            delete nP[state.selectedId]; setPeople(nP); updateHistory(nP);
-            state.selectedId = null; if(state.focusId === state.selectedId) state.focusId = null; 
-            render(); updateSidebar(); showToast("Node eradicated");
-        });
-        els.btnCloseSidebar.addEventListener('click', () => { state.selectedId = null; render(); updateSidebar(); });
-
-        els.btnFocusNode.addEventListener('click', () => {
-            if(state.focusId === state.selectedId) { state.focusId = null; showToast("Focus cleared"); } 
-            else { state.focusId = state.selectedId; showToast("Focused on Branch"); }
-            render(); fitToScreen();
-        });
-        els.focusIndicator.addEventListener('click', () => { state.focusId = null; render(); fitToScreen(); showToast("Focus cleared"); });
-
-        // --- Top Bar Actions ---
-        els.searchInput.addEventListener('input', e => { state.searchQuery = e.target.value; render(); });
-        els.btnHeaderAdd.addEventListener('click', () => handleSmartAdd(null, 'root'));
-        els.btnAutoLayout.addEventListener('click', performAutoLayout);
-        els.btnUndo.addEventListener('click', () => { if(state.historyIndex>0) { state.historyIndex--; setPeople(JSON.parse(JSON.stringify(state.history[state.historyIndex]))); }});
-        els.btnRedo.addEventListener('click', () => { if(state.historyIndex<state.history.length-1) { state.historyIndex++; setPeople(JSON.parse(JSON.stringify(state.history[state.historyIndex]))); }});
-        
-        // Appearance & Themes
-        els.btnThemeToggle.addEventListener('click', () => {
-            state.theme = state.theme === 'light' ? 'dark' : 'light'; localStorage.setItem('nexusTheme', state.theme);
-            state.theme === 'dark' ? (document.documentElement.classList.add('dark'), els.themeIcon.className='fas fa-sun') : (document.documentElement.classList.remove('dark'), els.themeIcon.className='fas fa-moon');
-            render();
-        });
-
-        document.querySelectorAll('.theme-option').forEach(el => {
-            el.addEventListener('click', (e) => {
-                const target = e.target.closest('.theme-option');
-                if (target) {
-                    state.nodeStyle = target.dataset.theme;
-                    localStorage.setItem('nexusNodeStyle', state.nodeStyle);
+            // click background to deselect
+            els.canvasContainer.addEventListener('click', (e) => {
+                if (e.target === els.canvasContainer || e.target === els.canvas || e.target.closest('svg')) {
+                    state.selectedId = null;
                     render();
+                    updateSidebar();
                 }
             });
-        });
 
-        // Viewport
-        els.btnFitScreen.addEventListener('click', () => fitToScreen());
-        els.btnZoomIn.addEventListener('click', () => { state.transform.scale = Math.min(3, state.transform.scale * 1.3); applyTransform(true); });
-        els.btnZoomOut.addEventListener('click', () => { state.transform.scale = Math.max(0.05, state.transform.scale * 0.7); applyTransform(true); });
-
-        // Export/Import
-        els.btnPrint.addEventListener('click', () => window.print());
-        els.btnExportJSON.addEventListener('click', () => {
-            const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state.people, null, 2)); a.download = "nexus-tree.json"; a.click();
-            showToast("Backup exported", "success");
-        });
-        els.fileImport.addEventListener('change', e => {
-            const f = e.target.files[0]; if(!f) return;
-            const r = new FileReader(); r.onload = ev => {
-                try { const p = sanitizeData(JSON.parse(ev.target.result)); setPeople(p); updateHistory(p, true); showToast("Imported successfully", "success"); setTimeout(()=>fitToScreen(), 100); } 
-                catch { showToast("Invalid JSON", "error"); }
-            }; r.readAsText(f);
-        });
-
-        // ULTIMATE IMAGE EXPORT (html-to-image fix)
-        els.btnExportImage.addEventListener('click', async () => {
-            if(Object.keys(state.people).length===0) return showToast("Tree is empty", "error");
-            showToast("Generating High-Res Image...", "info");
-            
-            // 1. Deselect temporarily so hover/selection outlines don't appear in export
-            const originalSelection = state.selectedId;
-            state.selectedId = null;
-            render();
-
-            const oldTx = { ...state.transform };
-            const box = getBoundingBox(Object.values(state.people));
-            els.canvas.style.transition = 'none';
-            
-            // 2. Size the element exactly to the bounding box of the tree with padding
-            const padding = 200;
-            const targetWidth = box.width + padding * 2;
-            const targetHeight = box.height + padding * 2;
-            
-            els.canvas.style.transform = `translate(${-box.minX + padding}px, ${-box.minY + padding}px) scale(1)`;
-            els.canvas.style.width = `${targetWidth}px`;
-            els.canvas.style.height = `${targetHeight}px`;
-
-            // Wait for DOM to flush the sizing
-            await new Promise(resolve => setTimeout(resolve, 300));
-            
-            try {
-                // 3. Render directly using the new dimensions
-                const dataUrl = await htmlToImage.toPng(els.canvas, { 
-                    backgroundColor: state.theme === 'dark' ? '#0f172a' : '#f8fafc', 
-                    width: targetWidth, 
-                    height: targetHeight, 
-                    pixelRatio: 2 // Crisp output
-                });
+            // wheel zoom
+            els.canvasContainer.addEventListener('wheel', (e) => {
+                if (e.target.closest('.no-pan') || e.target.closest('aside')) return;
+                e.preventDefault();
                 
-                const link = document.createElement('a'); 
-                link.download = `nexus-family-tree.png`; 
-                link.href = dataUrl; 
-                link.click();
-                showToast("Image Downloaded successfully!", "success");
-            } catch(e) { 
-                console.error(e);
-                showToast("Export failed. If tree is massive, try exporting to JSON instead.", "error"); 
-            } finally { 
-                // 4. Restore everything to exactly how it was
-                els.canvas.style.width = '100%';
-                els.canvas.style.height = '100%';
-                state.transform = oldTx; 
-                state.selectedId = originalSelection;
-                render();
-                applyTransform(false); 
+                const sens = 0.002;
+                let newScale = Math.min(Math.max(0.05, state.transform.scale * (1 - e.deltaY * sens)), 3);
+                
+                const r = els.canvasContainer.getBoundingClientRect();
+                const mouseX = e.clientX - r.left;
+                const mouseY = e.clientY - r.top;
+                
+                // Zoom toward mouse position
+                const scaleRatio = newScale / state.transform.scale;
+                const newX = mouseX - (mouseX - state.transform.x) * scaleRatio;
+                const newY = mouseY - (mouseY - state.transform.y) * scaleRatio;
+                
+                state.transform = {
+                    x: newX,
+                    y: newY,
+                    scale: newScale
+                };
+                
+                applyTransform();
+            }, { passive: false });
+
+            // Detect touch device for better UX
+            if ('ontouchstart' in window) {
+                document.body.classList.add('touch-device');
             }
-        });
 
-        // --- INIT ---
-        function init() {
-            try {
-                const t = localStorage.getItem('nexusTheme') || 'light'; state.theme = t;
-                if(t === 'dark') { document.documentElement.classList.add('dark'); els.themeIcon.className='fas fa-sun'; }
-                
-                const style = localStorage.getItem('nexusNodeStyle') || 'classic';
-                state.nodeStyle = ['classic', 'elegant', 'brutalism'].includes(style) ? style : 'classic';
-                
-                const saved = localStorage.getItem('nexusTreeData');
-                if (saved) { try { state.people = sanitizeData(JSON.parse(saved)); } catch { state.people = {}; } }
-                
-                updateHistory(state.people, true); render(); setTimeout(() => fitToScreen(false), 100);
-            } catch(err) { showToast("Init failed, resetting.", "error"); }
-        }
-        init();
+            // ---------- INIT ----------
+            const init = () => {
+                try {
+                    // Apply theme
+                    if (state.theme === 'dark') { 
+                        document.documentElement.classList.add('dark'); 
+                        els.themeIcon.className = 'fas fa-sun'; 
+                    } else { 
+                        document.documentElement.classList.remove('dark'); 
+                        els.themeIcon.className = 'fas fa-moon'; 
+                    }
+
+                    // Load saved data
+                    const saved = localStorage.getItem('nexusTreeData');
+                    if (saved) {
+                        try { 
+                            state.people = sanitizeData(JSON.parse(saved)); 
+                        } catch { 
+                            state.people = {}; 
+                        }
+                    }
+                    
+                    // Create demo data if empty
+                    if (!Object.keys(state.people).length) {
+                        // Create a beautiful demo tree
+                        const adam = generateId();
+                        const eve = generateId();
+                        const cain = generateId();
+                        const abel = generateId();
+                        
+                        state.people[adam] = { 
+                            ...getDefaultPerson(), 
+                            id: adam, 
+                            name: 'Adam Nexus', 
+                            gender: 'male', 
+                            position: { x: 500, y: 200 },
+                            birthDate: '1950-01-01',
+                            birthPlace: 'New York',
+                            notes: 'Founder of the Nexus dynasty'
+                        };
+                        
+                        state.people[eve] = { 
+                            ...getDefaultPerson(), 
+                            id: eve, 
+                            name: 'Eve Nexus', 
+                            gender: 'female', 
+                            spouse: adam,
+                            position: { x: 500 + NODE_WIDTH, y: 200 },
+                            birthDate: '1952-03-15',
+                            birthPlace: 'Boston'
+                        };
+                        
+                        state.people[adam].spouse = eve;
+                        
+                        state.people[cain] = { 
+                            ...getDefaultPerson(), 
+                            id: cain, 
+                            name: 'Cain Nexus', 
+                            gender: 'male', 
+                            parents: [adam, eve],
+                            position: { x: 500, y: 200 + GEN_SPACING_Y },
+                            birthDate: '1975-06-20'
+                        };
+                        
+                        state.people[abel] = { 
+                            ...getDefaultPerson(), 
+                            id: abel, 
+                            name: 'Abel Nexus', 
+                            gender: 'male', 
+                            parents: [adam, eve],
+                            position: { x: 500 + NODE_WIDTH + 100, y: 200 + GEN_SPACING_Y },
+                            birthDate: '1978-09-10'
+                        };
+                        
+                        state.people[adam].children = [cain, abel];
+                        state.people[eve].children = [cain, abel];
+                        
+                        showToast("✨ Welcome to Nexus Tree!", "success");
+                    }
+                    
+                    updateHistory(state.people, true);
+                    render();
+                    setTimeout(() => fitToScreen(false), 100);
+                    
+                    // Auto-save every 30 seconds
+                    setInterval(() => {
+                        saveToStorage();
+                        showToast("Auto-saved", "info", 1000);
+                    }, 30000);
+                    
+                } catch (err) {
+                    console.warn("init error", err);
+                    showToast("Initialization complete", "info");
+                }
+            };
+            
+            init();
+        })();
     </script>
 </body>
 </html>
