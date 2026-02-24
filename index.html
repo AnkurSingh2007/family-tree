@@ -8,7 +8,8 @@
     <!-- Tailwind + Fonts + Icons -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js"></script>
     
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Lora:ital,wght@0,400;0,600;1,400&family=Space+Mono:wght@400;700&display=swap');
@@ -24,16 +25,34 @@
         .dark ::-webkit-scrollbar-thumb { background: #475569; }
         .dark ::-webkit-scrollbar-thumb:hover { background: #64748b; }
         
-        .canvas-bg { background-image: radial-gradient(circle at 1px 1px, #cbd5e1 1px, transparent 0); background-size: 32px 32px; }
-        .dark .canvas-bg { background-image: radial-gradient(circle at 1px 1px, #334155 1px, transparent 0); }
+        .canvas-bg { 
+            background-image: radial-gradient(circle at 1px 1px, #cbd5e1 1px, transparent 0); 
+            background-size: 32px 32px; 
+            transition: background-image 0.3s ease;
+        }
+        .dark .canvas-bg { 
+            background-image: radial-gradient(circle at 1px 1px, #334155 1px, transparent 0); 
+        }
+        
+        .canvas-bg.flow {
+            background-image: linear-gradient(45deg, #cbd5e1 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+        
+        .canvas-bg.org {
+            background-image: repeating-linear-gradient(45deg, #cbd5e1 0px, #cbd5e1 1px, transparent 1px, transparent 20px);
+            background-size: 40px 40px;
+        }
         
         .node-element { 
-            transition: box-shadow 0.2s ease, border-color 0.2s ease, filter 0.2s ease; 
+            transition: box-shadow 0.2s ease, border-color 0.2s ease, filter 0.2s ease, transform 0.1s ease; 
             transform-origin: top left; 
             touch-action: none; 
             user-select: none;
             will-change: transform;
             backface-visibility: hidden;
+            position: absolute;
+            cursor: move;
         }
         
         .node-element::after {
@@ -49,6 +68,27 @@
         
         .node-element:hover::after {
             opacity: 1;
+        }
+        
+        .node-element.couple-highlight::before {
+            content: '';
+            position: absolute;
+            top: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 40px;
+            height: 40px;
+            background: rgba(236, 72, 153, 0.2);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+            z-index: 9999;
+            pointer-events: none;
+        }
+        
+        @keyframes pulse {
+            0% { transform: translateX(-50%) scale(0.8); opacity: 0.5; }
+            50% { transform: translateX(-50%) scale(1.2); opacity: 0.8; }
+            100% { transform: translateX(-50%) scale(0.8); opacity: 0.5; }
         }
         
         .action-btn { 
@@ -85,14 +125,11 @@
         #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; pointer-events: none; }
         #minimapViewport { transition: all 0.1s linear; }
         
-        /* split couple helpers */
         .split-left { border-top-right-radius: 0 !important; border-bottom-right-radius: 0 !important; border-right-width: 0 !important; }
         .split-right { border-top-left-radius: 0 !important; border-bottom-left-radius: 0 !important; }
         
-        /* smooth grab */
         .grabbing { cursor: grabbing !important; }
         
-        /* premium loading animation */
         .premium-glow {
             position: relative;
             overflow: hidden;
@@ -116,7 +153,6 @@
             100% { transform: translateX(100%) rotate(45deg); }
         }
         
-        /* print styles */
         @media print {
             .node-element {
                 box-shadow: none !important;
@@ -128,7 +164,6 @@
             body { background: white; }
         }
         
-        /* keyboard shortcut hint */
         .keyboard-hint {
             position: absolute;
             bottom: 20px;
@@ -151,6 +186,113 @@
         .keyboard-hint.visible {
             opacity: 1;
         }
+        
+        .template-preview {
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .template-preview:hover {
+            transform: scale(1.05);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        
+        .template-preview.selected {
+            border: 3px solid #6366f1;
+            transform: scale(1.02);
+        }
+        
+        .view-mode-btn {
+            transition: all 0.2s ease;
+        }
+        
+        .view-mode-btn.active {
+            background: #6366f1;
+            color: white;
+            transform: scale(1.1);
+        }
+        
+        .dark .view-mode-btn.active {
+            background: #818cf8;
+            color: #0f172a;
+        }
+        
+        .couple-badge {
+            position: absolute;
+            top: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, #ec4899, #f43f5e);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 30px;
+            font-size: 11px;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+            box-shadow: 0 10px 15px -3px rgba(236, 72, 153, 0.3);
+            z-index: 1000;
+            white-space: nowrap;
+            border: 2px solid white;
+            animation: float 3s ease-in-out infinite;
+        }
+        
+        .dark .couple-badge {
+            border-color: #1f2937;
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateX(-50%) translateY(0); }
+            50% { transform: translateX(-50%) translateY(-5px); }
+        }
+        
+        .spouse-connection-heart {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            color: #ec4899;
+            filter: drop-shadow(0 4px 6px rgba(236, 72, 153, 0.3));
+            animation: heartbeat 1.5s ease-in-out infinite;
+            z-index: 2000;
+            pointer-events: none;
+        }
+        
+        @keyframes heartbeat {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); }
+            25% { transform: translate(-50%, -50%) scale(1.2); }
+            30% { transform: translate(-50%, -50%) scale(1); }
+            35% { transform: translate(-50%, -50%) scale(1.1); }
+            40% { transform: translate(-50%, -50%) scale(1); }
+        }
+        
+        .connection-heart {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 30px;
+            height: 30px;
+            background: rgba(236, 72, 153, 0.9);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 16px;
+            box-shadow: 0 0 20px rgba(236, 72, 153, 0.5);
+            border: 2px solid white;
+            z-index: 1500;
+            pointer-events: none;
+        }
+        
+        .layout-animation {
+            transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        
+        .view-transition {
+            transition: background 0.3s ease, background-image 0.3s ease;
+        }
     </style>
 </head>
 <body class="text-gray-900 transition-colors duration-300 overflow-hidden flex flex-col h-screen select-none font-sans dark:text-white">
@@ -169,7 +311,7 @@
             </div>
             <div>
                 <h1 class="text-lg font-bold leading-tight tracking-tight bg-gradient-to-r from-indigo-600 to-indigo-400 bg-clip-text text-transparent dark:from-indigo-400 dark:to-indigo-300">Nexus Tree</h1>
-                <p class="text-[10px] uppercase font-bold tracking-wider text-indigo-600 dark:text-indigo-400">Enterprise Lineage v2.0</p>
+                <p class="text-[10px] uppercase font-bold tracking-wider text-indigo-600 dark:text-indigo-400">Enterprise Lineage v3.0</p>
             </div>
         </div>
         
@@ -181,7 +323,21 @@
                        class="w-full pl-9 pr-4 py-2 text-sm bg-gray-100 dark:bg-gray-800 dark:text-white border-none rounded-full focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
             </div>
 
-            <div class="h-6 w-px bg-gray-300 dark:bg-gray-700 mx-1 hidden sm:block"></div>
+            <!-- View Modes -->
+            <div class="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1 gap-1">
+                <button id="viewModeTree" class="view-mode-btn p-1.5 rounded-md text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-700 transition-all" title="Tree View">
+                    <i class="fas fa-sitemap"></i>
+                </button>
+                <button id="viewModeOrg" class="view-mode-btn p-1.5 rounded-md text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-700 transition-all" title="Org Chart">
+                    <i class="fas fa-chart-simple"></i>
+                </button>
+                <button id="viewModeFlow" class="view-mode-btn p-1.5 rounded-md text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-700 transition-all" title="Flow Diagram">
+                    <i class="fas fa-code-branch"></i>
+                </button>
+                <button id="viewModeRadial" class="view-mode-btn p-1.5 rounded-md text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-700 transition-all" title="Radial View">
+                    <i class="fas fa-circle-radiation"></i>
+                </button>
+            </div>
 
             <!-- history with badges -->
             <div class="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1 relative">
@@ -202,6 +358,48 @@
                 <button id="btnAutoLayout" title="Auto‑align tree (Ctrl+L)" class="p-2 w-9 h-9 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-600 transition-all hover:scale-110">
                     <i class="fas fa-magic"></i>
                 </button>
+                
+                <!-- Templates dropdown -->
+                <div class="relative group">
+                    <button id="btnTemplates" title="Templates" class="p-2 w-9 h-9 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all hover:scale-110">
+                        <i class="fas fa-layer-group"></i>
+                    </button>
+                    <div class="absolute top-full right-0 mt-2 w-80 bg-white/95 dark:bg-gray-800/95 backdrop-blur-lg rounded-xl shadow-2xl border border-gray-100 dark:border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all flex flex-col p-3 text-sm z-50 text-left max-h-96 overflow-y-auto">
+                        <div class="text-xs font-bold text-gray-400 uppercase mb-2 px-2">Choose Template</div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div class="template-preview p-2 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700" data-template="nuclear">
+                                <i class="fas fa-heart text-pink-500 mb-1"></i>
+                                <div class="font-bold">Nuclear Family</div>
+                                <div class="text-[10px] text-gray-500">2 parents, 2 children</div>
+                            </div>
+                            <div class="template-preview p-2 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700" data-template="threegen">
+                                <i class="fas fa-tree text-green-500 mb-1"></i>
+                                <div class="font-bold">Three Generations</div>
+                                <div class="text-[10px] text-gray-500">Grandparents to grandchildren</div>
+                            </div>
+                            <div class="template-preview p-2 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700" data-template="single">
+                                <i class="fas fa-user text-blue-500 mb-1"></i>
+                                <div class="font-bold">Single Parent</div>
+                                <div class="text-[10px] text-gray-500">One parent with children</div>
+                            </div>
+                            <div class="template-preview p-2 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700" data-template="blended">
+                                <i class="fas fa-people-arrows text-purple-500 mb-1"></i>
+                                <div class="font-bold">Blended Family</div>
+                                <div class="text-[10px] text-gray-500">With step-relations</div>
+                            </div>
+                            <div class="template-preview p-2 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700" data-template="royal">
+                                <i class="fas fa-crown text-yellow-500 mb-1"></i>
+                                <div class="font-bold">Royal Lineage</div>
+                                <div class="text-[10px] text-gray-500">Extended dynasty</div>
+                            </div>
+                            <div class="template-preview p-2 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700" data-template="empty">
+                                <i class="fas fa-eraser text-gray-500 mb-1"></i>
+                                <div class="font-bold">Empty Canvas</div>
+                                <div class="text-[10px] text-gray-500">Start fresh</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 
                 <!-- appearance dropdown -->
                 <div class="relative group">
@@ -254,8 +452,11 @@
                         <div id="btnExportSVG" class="px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer flex items-center gap-2 transition-colors">
                             <i class="fas fa-draw-polygon text-purple-500 w-4"></i> SVG Vector
                         </div>
+                        <div id="btnExportPDF" class="px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer flex items-center gap-2 transition-colors">
+                            <i class="fas fa-file-pdf text-red-500 w-4"></i> PDF Document
+                        </div>
                         <div id="btnPrint" class="px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer flex items-center gap-2 transition-colors">
-                            <i class="fas fa-file-pdf text-red-500 w-4"></i> Print / PDF
+                            <i class="fas fa-print text-gray-500 w-4"></i> Print
                         </div>
                     </div>
                 </div>
@@ -268,7 +469,7 @@
     </header>
 
     <!-- ========== MAIN CANVAS ========== -->
-    <div id="canvasContainer" class="flex-1 relative overflow-hidden bg-[#f8fafc] dark:bg-[#0f172a] canvas-bg print:!bg-white print:!bg-none cursor-grab active:cursor-grabbing transition-colors touch-none w-full">
+    <div id="canvasContainer" class="flex-1 relative overflow-hidden bg-[#f8fafc] dark:bg-[#0f172a] canvas-bg view-transition print:!bg-white print:!bg-none cursor-grab active:cursor-grabbing transition-colors touch-none w-full">
         
         <!-- focus indicator with animation -->
         <div id="focusIndicator" class="absolute top-6 left-1/2 -translate-x-1/2 bg-gradient-to-r from-amber-500 to-amber-600 text-white px-4 py-2 rounded-full shadow-lg font-bold text-sm z-10 hidden items-center gap-2 pointer-events-auto cursor-pointer hover:from-amber-600 hover:to-amber-700 transition-all animate-bounce">
@@ -289,7 +490,7 @@
         </div>
 
         <!-- transform layer with improved performance -->
-        <div id="canvas" class="absolute top-0 left-0 origin-top-left will-change-transform" style="transform: translate(0,0) scale(1); width:100%; height:100%;">
+        <div id="canvas" class="absolute top-0 left-0 origin-top-left will-change-transform layout-animation" style="transform: translate(0,0) scale(1); width:100%; height:100%;">
             <svg id="edgesLayer" class="absolute top-0 left-0 w-full h-full overflow-visible pointer-events-none z-0">
                 <defs>
                     <marker id="arrow-default" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
@@ -301,10 +502,16 @@
                     <marker id="arrow-brutalism" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                         <path d="M 0 0 L 10 5 L 0 10 z" class="fill-gray-900 dark:fill-white"></path>
                     </marker>
-                    <!-- premium gradients -->
+                    <marker id="arrow-heart" viewBox="0 0 20 20" refX="10" refY="10" markerWidth="15" markerHeight="15" orient="auto">
+                        <path d="M 10 3 C 5 0, 0 5, 10 15 C 20 5, 15 0, 10 3" class="fill-pink-500"></path>
+                    </marker>
                     <linearGradient id="gradient-active" x1="0%" y1="0%" x2="100%" y2="0%">
                         <stop offset="0%" stop-color="#6366f1" />
                         <stop offset="100%" stop-color="#8b5cf6" />
+                    </linearGradient>
+                    <linearGradient id="gradient-love" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stop-color="#ec4899" />
+                        <stop offset="100%" stop-color="#f43f5e" />
                     </linearGradient>
                 </defs>
                 <g id="edgesGroup"></g>
@@ -316,7 +523,7 @@
         <div class="no-pan absolute bottom-6 left-6 flex flex-col gap-3 print:hidden z-10">
             <div class="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-1.5 flex flex-col gap-1 w-12">
                 <button id="btnFitScreen" title="Fit to Screen (Space)" class="p-2 w-full rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all hover:scale-110">
-                    <i class="fas fa-compress text-sm"></i>
+                    <i class="fas fa-expand text-sm"></i>
                 </button>
                 <div class="h-px w-full bg-gray-200 dark:bg-gray-700 my-0.5"></div>
                 <button id="btnZoomIn" title="Zoom In (Ctrl++)" class="p-2 w-full rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all hover:scale-110">
@@ -326,7 +533,6 @@
                     <i class="fas fa-minus text-sm"></i>
                 </button>
             </div>
-            <!-- zoom percentage -->
             <div class="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 px-3 py-1.5 text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400 text-center" id="zoomPercent">
                 100%
             </div>
@@ -349,6 +555,7 @@
             <span><i class="fas fa-users text-indigo-500 mr-1"></i> <span id="totalNodes">0</span></span>
             <span><i class="fas fa-venus-mars text-pink-500 mr-1"></i> <span id="genderRatio">0/0</span></span>
             <span><i class="fas fa-heart text-red-500 mr-1"></i> <span id="totalCouples">0</span></span>
+            <span><i class="fas fa-eye text-green-500 mr-1"></i> <span id="viewModeLabel">Tree</span></span>
         </div>
     </div>
 
@@ -502,6 +709,7 @@
                 searchQuery: '',
                 theme: localStorage.getItem('nexusTheme') || 'light',
                 nodeStyle: localStorage.getItem('nexusNodeStyle') || 'classic',
+                viewMode: localStorage.getItem('nexusViewMode') || 'tree',
                 transform: { x: 0, y: 0, scale: 1 },
                 lastSave: Date.now()
             };
@@ -523,7 +731,7 @@
                 searchInput: $('searchInput'), btnUndo: $('btnUndo'), btnRedo: $('btnRedo'),
                 btnAutoLayout: $('btnAutoLayout'), btnExportJSON: $('btnExportJSON'), 
                 btnExportImage: $('btnExportImage'), btnExportSVG: $('btnExportSVG'),
-                btnPrint: $('btnPrint'), fileImport: $('fileImport'), 
+                btnExportPDF: $('btnExportPDF'), btnPrint: $('btnPrint'), fileImport: $('fileImport'), 
                 btnThemeToggle: $('btnThemeToggle'), themeIcon: $('themeIcon'),
                 btnFitScreen: $('btnFitScreen'), btnZoomIn: $('btnZoomIn'), btnZoomOut: $('btnZoomOut'),
                 toast: $('toast'), toastBody: $('toastBody'), toastIcon: $('toastIcon'), toastMessage: $('toastMessage'),
@@ -532,7 +740,10 @@
                 focusIndicator: $('focusIndicator'), zoomPercent: $('zoomPercent'),
                 totalNodes: $('totalNodes'), genderRatio: $('genderRatio'), 
                 totalCouples: $('totalCouples'), nodeCount: $('nodeCount'),
-                tieCount: $('tieCount'), undoDot: $('undoDot'), keyboardHint: $('keyboardHint')
+                tieCount: $('tieCount'), undoDot: $('undoDot'), keyboardHint: $('keyboardHint'),
+                viewModeTree: $('viewModeTree'), viewModeOrg: $('viewModeOrg'),
+                viewModeFlow: $('viewModeFlow'), viewModeRadial: $('viewModeRadial'),
+                viewModeLabel: $('viewModeLabel')
             };
 
             // ---------- HELPERS ----------
@@ -622,6 +833,17 @@
                     const midX = sx + (ex - sx)/2;
                     return `M ${sx} ${sy} C ${midX} ${sy}, ${midX} ${ey}, ${ex} ${ey}`;
                 }
+            };
+
+            const getRadialPath = (sx, sy, ex, ey) => {
+                const dx = ex - sx;
+                const dy = ey - sy;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                const ctrl1X = sx + dx * 0.25;
+                const ctrl1Y = sy + dy * 0.25 - dist * 0.2;
+                const ctrl2X = sx + dx * 0.75;
+                const ctrl2Y = sy + dy * 0.75 - dist * 0.2;
+                return `M ${sx} ${sy} C ${ctrl1X} ${ctrl1Y}, ${ctrl2X} ${ctrl2Y}, ${ex} ${ey}`;
             };
 
             const getBoundingBox = (nodes) => {
@@ -740,6 +962,46 @@
                 
                 const couples = nodes.filter(n => n.spouse && n.id < n.spouse).length;
                 if (els.totalCouples) els.totalCouples.innerText = couples;
+                
+                if (els.viewModeLabel) {
+                    const modeNames = { tree: 'Tree', org: 'Org', flow: 'Flow', radial: 'Radial' };
+                    els.viewModeLabel.innerText = modeNames[state.viewMode] || 'Tree';
+                }
+            };
+
+            // ---------- VIEW MODES ----------
+            const setViewMode = (mode) => {
+                state.viewMode = mode;
+                localStorage.setItem('nexusViewMode', mode);
+                
+                // Update button states
+                [els.viewModeTree, els.viewModeOrg, els.viewModeFlow, els.viewModeRadial].forEach(btn => {
+                    btn?.classList.remove('active');
+                });
+                
+                switch(mode) {
+                    case 'tree': 
+                        els.viewModeTree?.classList.add('active');
+                        els.canvasContainer.classList.remove('flow', 'org');
+                        break;
+                    case 'org':
+                        els.viewModeOrg?.classList.add('active');
+                        els.canvasContainer.classList.add('org');
+                        els.canvasContainer.classList.remove('flow');
+                        break;
+                    case 'flow':
+                        els.viewModeFlow?.classList.add('active');
+                        els.canvasContainer.classList.add('flow');
+                        els.canvasContainer.classList.remove('org');
+                        break;
+                    case 'radial':
+                        els.viewModeRadial?.classList.add('active');
+                        els.canvasContainer.classList.remove('flow', 'org');
+                        break;
+                }
+                
+                render();
+                showToast(`${mode.charAt(0).toUpperCase() + mode.slice(1)} View`, 'success');
             };
 
             // ---------- AUTO LAYOUT (PERFECT SYMMETRY) ----------
@@ -753,7 +1015,7 @@
                     if (placed.has(nodeId)) return 0;
                     const node = nP[nodeId];
                     const spouseId = node.spouse && nP[node.spouse] && !placed.has(node.spouse) ? node.spouse : null;
-                    const familyWidth = spouseId ? (NODE_WIDTH*2) : NODE_WIDTH;
+                    const familyWidth = spouseId ? (NODE_WIDTH*2 + COUPLE_SPACING_X) : NODE_WIDTH;
 
                     let childrenWidth = 0;
                     let childX = xOffset;
@@ -783,7 +1045,7 @@
                     placed.add(nodeId);
                     
                     if (spouseId) {
-                        nP[spouseId].position = { x: myX + NODE_WIDTH, y: depth * GEN_SPACING_Y };
+                        nP[spouseId].position = { x: myX + NODE_WIDTH + COUPLE_SPACING_X, y: depth * GEN_SPACING_Y };
                         placed.add(spouseId);
                     }
                     
@@ -831,6 +1093,154 @@
                 setTimeout(() => fitToScreen(true), 50);
             };
 
+            // ---------- TEMPLATES ----------
+            const applyTemplate = (type) => {
+                let nP = {};
+                const id = (name, gender) => {
+                    const newId = generateId();
+                    nP[newId] = { ...getDefaultPerson(), id: newId, name, gender };
+                    return newId;
+                };
+
+                switch(type) {
+                    case 'nuclear': {
+                        const father = id('John Smith', 'male');
+                        const mother = id('Jane Smith', 'female');
+                        const son = id('Mike Smith', 'male');
+                        const daughter = id('Emily Smith', 'female');
+                        
+                        nP[father].spouse = mother;
+                        nP[mother].spouse = father;
+                        
+                        nP[father].children = [son, daughter];
+                        nP[mother].children = [son, daughter];
+                        nP[son].parents = [father, mother];
+                        nP[daughter].parents = [father, mother];
+                        
+                        nP[father].position = { x: 400, y: 200 };
+                        nP[mother].position = { x: 400 + NODE_WIDTH + 60, y: 200 };
+                        nP[son].position = { x: 400, y: 200 + GEN_SPACING_Y };
+                        nP[daughter].position = { x: 400 + NODE_WIDTH + 60, y: 200 + GEN_SPACING_Y };
+                        break;
+                    }
+                    
+                    case 'threegen': {
+                        const grandpa = id('Robert Senior', 'male');
+                        const grandma = id('Eleanor Senior', 'female');
+                        const father = id('Robert Junior', 'male');
+                        const mother = id('Sarah Junior', 'female');
+                        const child1 = id('Little Robert', 'male');
+                        const child2 = id('Emma', 'female');
+                        
+                        nP[grandpa].spouse = grandma;
+                        nP[grandma].spouse = grandpa;
+                        
+                        nP[grandpa].children = [father];
+                        nP[grandma].children = [father];
+                        nP[father].parents = [grandpa, grandma];
+                        
+                        nP[father].spouse = mother;
+                        nP[mother].spouse = father;
+                        nP[father].children = [child1, child2];
+                        nP[mother].children = [child1, child2];
+                        nP[child1].parents = [father, mother];
+                        nP[child2].parents = [father, mother];
+                        
+                        nP[grandpa].position = { x: 300, y: 100 };
+                        nP[grandma].position = { x: 300 + NODE_WIDTH + 60, y: 100 };
+                        nP[father].position = { x: 300 + (NODE_WIDTH)/2, y: 100 + GEN_SPACING_Y };
+                        nP[mother].position = { x: 300 + (NODE_WIDTH)/2 + NODE_WIDTH + 60, y: 100 + GEN_SPACING_Y };
+                        nP[child1].position = { x: 300, y: 100 + GEN_SPACING_Y*2 };
+                        nP[child2].position = { x: 300 + NODE_WIDTH + 60, y: 100 + GEN_SPACING_Y*2 };
+                        break;
+                    }
+                    
+                    case 'single': {
+                        const parent = id('Alex Parent', 'female');
+                        const child1 = id('Sam', 'male');
+                        const child2 = id('Jordan', 'female');
+                        
+                        nP[parent].children = [child1, child2];
+                        nP[child1].parents = [parent];
+                        nP[child2].parents = [parent];
+                        
+                        nP[parent].position = { x: 400, y: 200 };
+                        nP[child1].position = { x: 400 - 100, y: 200 + GEN_SPACING_Y };
+                        nP[child2].position = { x: 400 + 100, y: 200 + GEN_SPACING_Y };
+                        break;
+                    }
+                    
+                    case 'blended': {
+                        const father1 = id('Mike First', 'male');
+                        const mother1 = id('Lisa First', 'female');
+                        const child1 = id('Tom First', 'male');
+                        
+                        const father2 = id('John Second', 'male');
+                        const mother2 = id('Lisa Second', 'female');
+                        const child2 = id('Emma Second', 'female');
+                        
+                        nP[father1].spouse = mother1;
+                        nP[mother1].spouse = father1;
+                        nP[father1].children = [child1];
+                        nP[mother1].children = [child1];
+                        nP[child1].parents = [father1, mother1];
+                        
+                        nP[father2].spouse = mother2;
+                        nP[mother2].spouse = father2;
+                        nP[father2].children = [child2];
+                        nP[mother2].children = [child2];
+                        nP[child2].parents = [father2, mother2];
+                        
+                        nP[father1].position = { x: 200, y: 100 };
+                        nP[mother1].position = { x: 200 + NODE_WIDTH + 60, y: 100 };
+                        nP[child1].position = { x: 200 + (NODE_WIDTH)/2, y: 100 + GEN_SPACING_Y };
+                        
+                        nP[father2].position = { x: 600, y: 100 };
+                        nP[mother2].position = { x: 600 + NODE_WIDTH + 60, y: 100 };
+                        nP[child2].position = { x: 600 + (NODE_WIDTH)/2, y: 100 + GEN_SPACING_Y };
+                        break;
+                    }
+                    
+                    case 'royal': {
+                        const king = id('King George', 'male');
+                        const queen = id('Queen Mary', 'female');
+                        const prince1 = id('Prince Charles', 'male');
+                        const prince2 = id('Prince William', 'male');
+                        const princess = id('Princess Anne', 'female');
+                        const grandchild1 = id('Prince George', 'male');
+                        const grandchild2 = id('Princess Charlotte', 'female');
+                        
+                        nP[king].spouse = queen;
+                        nP[queen].spouse = king;
+                        nP[king].children = [prince1, prince2, princess];
+                        nP[queen].children = [prince1, prince2, princess];
+                        
+                        nP[prince1].parents = [king, queen];
+                        nP[prince1].children = [grandchild1, grandchild2];
+                        nP[grandchild1].parents = [prince1];
+                        nP[grandchild2].parents = [prince1];
+                        
+                        nP[king].position = { x: 400, y: 50 };
+                        nP[queen].position = { x: 400 + NODE_WIDTH + 60, y: 50 };
+                        nP[prince1].position = { x: 300, y: 50 + GEN_SPACING_Y };
+                        nP[prince2].position = { x: 500, y: 50 + GEN_SPACING_Y };
+                        nP[princess].position = { x: 700, y: 50 + GEN_SPACING_Y };
+                        nP[grandchild1].position = { x: 250, y: 50 + GEN_SPACING_Y*2 };
+                        nP[grandchild2].position = { x: 350, y: 50 + GEN_SPACING_Y*2 };
+                        break;
+                    }
+                    
+                    case 'empty':
+                        nP = {};
+                        break;
+                }
+                
+                setPeople(nP);
+                updateHistory(nP, true);
+                showToast(`✨ ${type.charAt(0).toUpperCase() + type.slice(1)} template applied`, 'success');
+                setTimeout(() => fitToScreen(true), 100);
+            };
+
             // ---------- SMART ADD ----------
             const handleSmartAdd = (sourceId, type) => {
                 const id = generateId();
@@ -846,7 +1256,7 @@
                         pos.y += GEN_SPACING_Y; 
                         pos.x += (nP[sourceId].children?.length || 0) * 150; 
                     } else if (type === 'spouse') {
-                        pos.x += NODE_WIDTH;
+                        pos.x += NODE_WIDTH + 60;
                     }
                 } else {
                     const r = els.canvasContainer.getBoundingClientRect();
@@ -871,13 +1281,22 @@
                     } else if (type === 'child') {
                         nP[sourceId].children.push(id);
                         nP[id].parents = [sourceId];
-                        if (nP[sourceId].spouse) {
+                        if (nP[sourceId].spouse && nP[nP[sourceId].spouse]) {
                             nP[nP[sourceId].spouse].children.push(id);
                             nP[id].parents.push(nP[sourceId].spouse);
                         }
                     } else if (type === 'spouse') {
                         nP[sourceId].spouse = id;
                         nP[id].spouse = sourceId;
+                        // Add spouse to children relationships
+                        if (nP[sourceId].children) {
+                            nP[id].children = [...nP[sourceId].children];
+                            nP[sourceId].children.forEach(childId => {
+                                if (nP[childId] && !nP[childId].parents.includes(id)) {
+                                    nP[childId].parents.push(id);
+                                }
+                            });
+                        }
                     }
                 }
 
@@ -888,7 +1307,7 @@
                 showToast(`✨ Added new ${type}`, "success");
             };
 
-            // ---------- RENDER (with style themes) ----------
+            // ---------- RENDER (with style themes and couple emphasis) ----------
             const updateThemeChecks = () => {
                 document.querySelectorAll('.check-icon').forEach(ic => 
                     ic.classList.toggle('hidden', ic.dataset.check !== state.nodeStyle)
@@ -909,7 +1328,7 @@
                 }
 
                 const kinship = calculateKinship(state.selectedId);
-                let edgesHTML = '', nodesHTML = '';
+                let edgesHTML = '', nodesHTML = '', heartsHTML = '';
 
                 const isBrutal = state.nodeStyle === 'brutalism';
                 const isElegant = state.nodeStyle === 'elegant';
@@ -922,6 +1341,9 @@
                 if (isMidnight) baseLineColor = state.theme === 'dark' ? '#60a5fa' : '#2563eb';
                 if (isForest) baseLineColor = state.theme === 'dark' ? '#6ee7b7' : '#059669';
 
+                // Track couples for heart placement
+                const coupleHearts = new Set();
+
                 activeNodes.forEach(person => {
                     const isSelected = state.selectedId === person.id;
                     if (state.searchQuery && !person.name.toLowerCase().includes(state.searchQuery.toLowerCase()) && !isSelected) return;
@@ -931,20 +1353,29 @@
                         const sp = state.people[person.spouse];
                         if (person.position.y === sp.position.y && isNodeInFocus(sp.id)) {
                             const dx = Math.round(sp.position.x - person.position.x);
-                            if (dx === NODE_WIDTH) isLeftSpouse = true;
-                            if (dx === -NODE_WIDTH) isRightSpouse = true;
+                            if (dx === NODE_WIDTH + COUPLE_SPACING_X) {
+                                isLeftSpouse = true;
+                                coupleHearts.add(person.id + '-' + sp.id);
+                            }
+                            if (dx === -(NODE_WIDTH + COUPLE_SPACING_X)) {
+                                isRightSpouse = true;
+                                coupleHearts.add(sp.id + '-' + person.id);
+                            }
                         }
                     }
 
-                    const drawPath = (sx, sy, ex, ey, dir) => 
-                        isBrutal ? getOrthogonalPath(sx, sy, ex, ey, dir) : getSmoothBezier(sx, sy, ex, ey, dir);
+                    const getPath = (sx, sy, ex, ey, type) => {
+                        if (state.viewMode === 'radial') return getRadialPath(sx, sy, ex, ey);
+                        if (isBrutal) return getOrthogonalPath(sx, sy, ex, ey, type);
+                        return getSmoothBezier(sx, sy, ex, ey, type);
+                    };
 
                     // Draw child connections
                     (person.children || []).forEach(childId => {
                         const child = state.people[childId];
                         if (!child || !isNodeInFocus(childId)) return;
                         let startX = person.position.x + NODE_WIDTH/2;
-                        if (isLeftSpouse) startX += NODE_WIDTH/2;
+                        if (isLeftSpouse) startX += NODE_WIDTH/2 + COUPLE_SPACING_X/2;
                         if (isRightSpouse) return;
                         
                         const isActive = isSelected || state.selectedId===childId || !!kinship[person.id] || !!kinship[childId];
@@ -952,7 +1383,7 @@
                         if (isMidnight) activeColor = '#60a5fa';
                         if (isForest) activeColor = '#10b981';
                         
-                        edgesHTML += `<path d="${drawPath(startX, person.position.y+NODE_HEIGHT, child.position.x+NODE_WIDTH/2, child.position.y, 'vertical')}" 
+                        edgesHTML += `<path d="${getPath(startX, person.position.y+NODE_HEIGHT, child.position.x+NODE_WIDTH/2, child.position.y, 'vertical')}" 
                                       stroke="${isActive ? activeColor : baseLineColor}" 
                                       stroke-width="${isActive||isBrutal ? 3 : 2}" 
                                       fill="none" 
@@ -960,7 +1391,7 @@
                                       class="path-anim"></path>`;
                     });
 
-                    // Draw spouse connection if needed
+                    // Draw spouse connection with heart
                     if (!isLeftSpouse && !isRightSpouse && person.spouse && state.people[person.spouse] && person.id < person.spouse && isNodeInFocus(person.spouse)) {
                         const sp = state.people[person.spouse];
                         const isActive = isSelected || state.selectedId===sp.id;
@@ -970,25 +1401,61 @@
                         
                         const sColor = isBrutal ? baseLineColor : (state.theme==='dark'?'#831843':'#fbcfe8');
                         
-                        edgesHTML += `<path d="${drawPath(person.position.x+NODE_WIDTH, person.position.y+NODE_HEIGHT/2, sp.position.x, sp.position.y+NODE_HEIGHT/2, 'horizontal')}" 
+                        // Draw connection line
+                        edgesHTML += `<path d="${getPath(person.position.x+NODE_WIDTH, person.position.y+NODE_HEIGHT/2, sp.position.x, sp.position.y+NODE_HEIGHT/2, 'horizontal')}" 
                                       stroke="${isActive ? activeColor : sColor}" 
                                       stroke-width="3" 
                                       stroke-dasharray="5,5" 
                                       fill="none" 
                                       class="path-anim"></path>`;
+                        
+                        // Add heart at midpoint
+                        const midX = (person.position.x + NODE_WIDTH + sp.position.x) / 2;
+                        const midY = person.position.y + NODE_HEIGHT/2;
+                        
+                        heartsHTML += `<div class="connection-heart" style="left: ${midX}px; top: ${midY}px; transform: translate(-50%, -50%);">
+                            <i class="fas fa-heart"></i>
+                        </div>`;
+                    }
+                });
+
+                // Add couple badges for each unique couple
+                coupleHearts.forEach(pair => {
+                    const [id1, id2] = pair.split('-');
+                    const p1 = state.people[id1];
+                    const p2 = state.people[id2];
+                    if (p1 && p2) {
+                        const midX = (p1.position.x + NODE_WIDTH + p2.position.x) / 2;
+                        const midY = p1.position.y + NODE_HEIGHT/2 - 30;
+                        
+                        heartsHTML += `<div class="couple-badge" style="left: ${midX}px; top: ${midY}px;">
+                            <i class="fas fa-heart mr-1"></i> ${p1.name.split(' ')[0]} & ${p2.name.split(' ')[0]}
+                        </div>`;
+                    }
+                });
+
+                // Generate node HTML
+                activeNodes.forEach(person => {
+                    const isSelected = state.selectedId === person.id;
+                    
+                    let isLeftSpouse = false, isRightSpouse = false;
+                    if (person.spouse && state.people[person.spouse]) {
+                        const sp = state.people[person.spouse];
+                        if (person.position.y === sp.position.y && isNodeInFocus(sp.id)) {
+                            const dx = Math.round(sp.position.x - person.position.x);
+                            if (dx === NODE_WIDTH + COUPLE_SPACING_X) isLeftSpouse = true;
+                            if (dx === -(NODE_WIDTH + COUPLE_SPACING_X)) isRightSpouse = true;
+                        }
                     }
 
-                    // node style application
                     let nodeClass = '', splitMod = '', photoClass = '', badge = '', fontClass = 'font-sans';
                     
-                    // Theme-based styling
                     if (isBrutal) {
                         fontClass = 'font-mono';
                         nodeClass = 'bg-white dark:bg-gray-900 border-2 border-gray-900 dark:border-white rounded-none';
                         if (isSelected) nodeClass += ' shadow-[6px_6px_0px_0px_#6366f1]';
                         else nodeClass += ' shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,1)]';
                         if (isLeftSpouse) splitMod = '!border-r-0';
-                        if (isLeftSpouse) badge = `<div class="absolute -right-[15px] top-1/2 -translate-y-1/2 bg-white dark:bg-gray-900 border-2 border-gray-900 dark:border-white w-[30px] h-[30px] flex items-center justify-center z-50 font-bold">+</div>`;
                         photoClass = 'rounded-none border-2 border-gray-900 dark:border-white bg-gray-100';
                     } 
                     else if (isElegant) {
@@ -997,7 +1464,6 @@
                         if (isSelected) nodeClass += ' ring-2 ring-[#d4c4a8] dark:ring-[#a8987b]';
                         if (isLeftSpouse) splitMod = '!rounded-r-none !border-r-0';
                         if (isRightSpouse) splitMod = '!rounded-l-none';
-                        if (isLeftSpouse) badge = `<div class="absolute -right-[15px] top-1/2 -translate-y-1/2 bg-[#faf9f6] dark:bg-[#2a2421] border border-[#d4c4a8] dark:border-[#4a3b32] rounded-full w-[30px] h-[30px] flex items-center justify-center z-50 shadow-md"><i class="fas fa-link text-[#a8987b] text-[10px]"></i></div>`;
                         photoClass = 'rounded-full border border-[#d4c4a8] dark:border-[#4a3b32] shadow-sm bg-white p-0.5';
                     }
                     else if (isMidnight) {
@@ -1006,7 +1472,6 @@
                         if (isSelected) nodeClass += ' ring-4 ring-blue-400 shadow-2xl';
                         if (isLeftSpouse) splitMod = 'split-left';
                         if (isRightSpouse) splitMod = 'split-right';
-                        if (isLeftSpouse) badge = `<div class="absolute -right-[15px] top-1/2 -translate-y-1/2 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-full w-[30px] h-[30px] flex items-center justify-center z-50 shadow-lg"><i class="fas fa-star text-white text-[10px]"></i></div>`;
                         photoClass = 'rounded-full border-2 border-blue-400 bg-blue-800';
                     }
                     else if (isForest) {
@@ -1015,16 +1480,14 @@
                         if (isSelected) nodeClass += ' ring-4 ring-green-400 shadow-2xl';
                         if (isLeftSpouse) splitMod = 'split-left';
                         if (isRightSpouse) splitMod = 'split-right';
-                        if (isLeftSpouse) badge = `<div class="absolute -right-[15px] top-1/2 -translate-y-1/2 bg-gradient-to-br from-green-500 to-emerald-500 rounded-full w-[30px] h-[30px] flex items-center justify-center z-50 shadow-lg"><i class="fas fa-leaf text-white text-[10px]"></i></div>`;
                         photoClass = 'rounded-full border-2 border-green-500 bg-green-700';
                     }
-                    else { // Classic
+                    else {
                         fontClass = 'font-sans';
                         nodeClass = 'bg-white/95 dark:bg-gray-800/95 backdrop-blur-md rounded-2xl ring-1 ring-gray-200 dark:ring-gray-700 shadow-sm';
                         if (isSelected) nodeClass += ' ring-2 ring-indigo-500 shadow-xl shadow-indigo-500/20 bg-indigo-50/80 dark:bg-indigo-900/30';
                         if (isLeftSpouse) splitMod = 'split-left';
                         if (isRightSpouse) splitMod = 'split-right';
-                        if (isLeftSpouse) badge = `<div class="absolute -right-[15px] top-1/2 -translate-y-1/2 bg-white dark:bg-gray-800 border-2 border-pink-400 rounded-full w-[30px] h-[30px] flex items-center justify-center z-50 shadow-md"><i class="fas fa-heart text-pink-500 text-[11px]"></i></div>`;
                         photoClass = 'rounded-full shadow-inner border border-gray-200 dark:border-gray-600 bg-gray-100';
                     }
 
@@ -1049,6 +1512,11 @@
                     
                     const kinLabel = (kinship[person.id] && person.id !== state.selectedId) ? 
                         `<div class="absolute -top-3 left-1/2 -translate-x-1/2 ${isMidnight?'bg-blue-600':isForest?'bg-green-600':'bg-indigo-600 dark:bg-indigo-500'} text-white text-[10px] uppercase font-bold px-3 py-0.5 rounded-full shadow-md whitespace-nowrap z-50 tracking-wider">${kinship[person.id]}</div>` : '';
+
+                    // Add couple highlight class if person has spouse
+                    if (person.spouse) {
+                        nodeClass += ' couple-highlight';
+                    }
 
                     nodesHTML += `<div class="node-element absolute top-0 left-0 transition-all duration-300 cursor-pointer print:!ring-gray-300 print:!shadow-none group ${fontClass} ${nodeClass} ${splitMod}" 
                                     style="transform:translate(${person.position.x}px,${person.position.y}px); width:${NODE_WIDTH}px; height:${NODE_HEIGHT}px; z-index:${isSelected?100:10}" 
@@ -1079,8 +1547,20 @@
                     </div>`;
                 });
 
+                // Combine all elements
                 els.edgesGroup.innerHTML = edgesHTML;
                 els.nodesLayer.innerHTML = nodesHTML;
+                
+                // Add hearts container if not exists
+                let heartsContainer = document.getElementById('heartsContainer');
+                if (!heartsContainer) {
+                    heartsContainer = document.createElement('div');
+                    heartsContainer.id = 'heartsContainer';
+                    heartsContainer.className = 'absolute top-0 left-0 w-full h-full pointer-events-none z-[1500]';
+                    els.canvas.appendChild(heartsContainer);
+                }
+                heartsContainer.innerHTML = heartsHTML;
+                
                 updateMinimap();
                 updateStats();
             };
@@ -1308,7 +1788,6 @@
                 const newId = generateId();
                 const nP = JSON.parse(JSON.stringify(state.people));
                 
-                // Create duplicate with offset position
                 nP[newId] = {
                     ...original,
                     id: newId,
@@ -1366,6 +1845,20 @@
             els.btnHeaderAdd.addEventListener('click', () => handleSmartAdd(null, 'root'));
             els.btnCreateFirst.addEventListener('click', () => handleSmartAdd(null, 'root'));
             els.btnAutoLayout.addEventListener('click', performAutoLayout);
+
+            // View mode buttons
+            els.viewModeTree.addEventListener('click', () => setViewMode('tree'));
+            els.viewModeOrg.addEventListener('click', () => setViewMode('org'));
+            els.viewModeFlow.addEventListener('click', () => setViewMode('flow'));
+            els.viewModeRadial.addEventListener('click', () => setViewMode('radial'));
+
+            // Template buttons
+            document.querySelectorAll('[data-template]').forEach(el => {
+                el.addEventListener('click', (e) => {
+                    const template = e.target.closest('[data-template]').dataset.template;
+                    applyTemplate(template);
+                });
+            });
 
             els.btnUndo.addEventListener('click', () => {
                 if (state.historyIndex > 0) {
@@ -1439,54 +1932,197 @@
                 showToast("JSON exported", "success");
             });
             
-            els.btnExportSVG = $('btnExportSVG');
-            if (els.btnExportSVG) {
-                els.btnExportSVG.addEventListener('click', async () => {
-                    showToast("Generating SVG...", "info");
-                    
-                    // Create SVG from canvas
-                    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-                    const box = getBoundingBox(Object.values(state.people));
-                    const padding = 50;
-                    
-                    svg.setAttribute('width', box.width + padding*2);
-                    svg.setAttribute('height', box.height + padding*2);
-                    svg.setAttribute('viewBox', `0 0 ${box.width + padding*2} ${box.height + padding*2}`);
-                    
-                    // Add background
-                    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-                    rect.setAttribute('width', '100%');
-                    rect.setAttribute('height', '100%');
-                    rect.setAttribute('fill', state.theme === 'dark' ? '#0f172a' : '#f8fafc');
-                    svg.appendChild(rect);
-                    
-                    // Copy edges from existing SVG
-                    const edges = els.edgesGroup.cloneNode(true);
-                    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-                    g.setAttribute('transform', `translate(${padding - box.minX}, ${padding - box.minY})`);
-                    
-                    // Clone edge paths
-                    edges.querySelectorAll('path').forEach(path => {
-                        const newPath = path.cloneNode(true);
-                        g.appendChild(newPath);
+            // PDF Export using html2canvas
+            els.btnExportPDF.addEventListener('click', async () => {
+                if (Object.keys(state.people).length === 0) {
+                    return showToast("Tree is empty", "error");
+                }
+                
+                showToast("Generating PDF...", "info", 2000);
+                
+                const originalSelected = state.selectedId;
+                const originalTransform = { ...state.transform };
+                
+                state.selectedId = null;
+                render();
+                
+                const nodes = Object.values(state.people);
+                const box = getBoundingBox(nodes);
+                const padding = 100;
+                
+                const targetWidth = Math.ceil(box.width + padding * 2);
+                const targetHeight = Math.ceil(box.height + padding * 2);
+                
+                els.canvas.style.transition = 'none';
+                els.canvas.style.width = targetWidth + 'px';
+                els.canvas.style.height = targetHeight + 'px';
+                els.canvas.style.transform = `translate(${-box.minX + padding}px, ${-box.minY + padding}px) scale(1)`;
+                
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                try {
+                    const canvas = await html2canvas(els.canvas, {
+                        backgroundColor: state.theme === 'dark' ? '#0f172a' : '#f8fafc',
+                        scale: 2,
+                        logging: false
                     });
                     
-                    svg.appendChild(g);
+                    const imgData = canvas.toDataURL('image/png');
                     
-                    // Convert to string and download
-                    const serializer = new XMLSerializer();
-                    const svgString = serializer.serializeToString(svg);
-                    const blob = new Blob([svgString], { type: 'image/svg+xml' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `nexus-tree-${Date.now()}.svg`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                    
-                    showToast("SVG exported", "success");
-                });
+                    // Create PDF with jsPDF if available
+                    if (window.jspdf) {
+                        const { jsPDF } = window.jspdf;
+                        const pdf = new jsPDF({
+                            orientation: targetWidth > targetHeight ? 'landscape' : 'portrait',
+                            unit: 'px'
+                        });
+                        
+                        const pdfWidth = pdf.internal.pageSize.getWidth();
+                        const pdfHeight = pdf.internal.pageSize.getHeight();
+                        const ratio = Math.min(pdfWidth / canvas.width, pdfHeight / canvas.height);
+                        
+                        const imgWidth = canvas.width * ratio;
+                        const imgHeight = canvas.height * ratio;
+                        
+                        pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+                        pdf.save(`nexus-tree-${new Date().toISOString().slice(0,10)}.pdf`);
+                        
+                        showToast("PDF downloaded", "success");
+                    } else {
+                        // Fallback to PNG if jsPDF not loaded
+                        const link = document.createElement('a');
+                        link.download = `nexus-tree-${new Date().toISOString().slice(0,10)}.png`;
+                        link.href = imgData;
+                        link.click();
+                        showToast("PNG downloaded instead", "success");
+                    }
+                } catch (err) {
+                    console.error('PDF export error:', err);
+                    showToast("Export failed", "error");
+                } finally {
+                    els.canvas.style.cssText = '';
+                    els.canvas.style.width = '100%';
+                    els.canvas.style.height = '100%';
+                    state.transform = originalTransform;
+                    state.selectedId = originalSelected;
+                    render();
+                    applyTransform(false);
+                }
+            });
+            
+            // Load jsPDF if not present
+            if (!window.jspdf) {
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+                document.head.appendChild(script);
             }
+            
+            els.btnExportSVG.addEventListener('click', async () => {
+                showToast("Generating SVG...", "info");
+                
+                const originalSelected = state.selectedId;
+                const originalTransform = { ...state.transform };
+                
+                state.selectedId = null;
+                render();
+                
+                const nodes = Object.values(state.people);
+                const box = getBoundingBox(nodes);
+                const padding = 50;
+                
+                const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                svg.setAttribute('width', box.width + padding*2);
+                svg.setAttribute('height', box.height + padding*2);
+                svg.setAttribute('viewBox', `0 0 ${box.width + padding*2} ${box.height + padding*2}`);
+                
+                const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                rect.setAttribute('width', '100%');
+                rect.setAttribute('height', '100%');
+                rect.setAttribute('fill', state.theme === 'dark' ? '#0f172a' : '#f8fafc');
+                svg.appendChild(rect);
+                
+                const edges = els.edgesGroup.cloneNode(true);
+                const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                g.setAttribute('transform', `translate(${padding - box.minX}, ${padding - box.minY})`);
+                
+                edges.querySelectorAll('path').forEach(path => {
+                    const newPath = path.cloneNode(true);
+                    g.appendChild(newPath);
+                });
+                
+                svg.appendChild(g);
+                
+                const serializer = new XMLSerializer();
+                const svgString = serializer.serializeToString(svg);
+                const blob = new Blob([svgString], { type: 'image/svg+xml' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `nexus-tree-${Date.now()}.svg`;
+                a.click();
+                URL.revokeObjectURL(url);
+                
+                state.transform = originalTransform;
+                state.selectedId = originalSelected;
+                render();
+                applyTransform(false);
+                
+                showToast("SVG exported", "success");
+            });
+            
+            els.btnExportImage.addEventListener('click', async () => {
+                if (Object.keys(state.people).length === 0) {
+                    return showToast("Tree is empty", "error");
+                }
+                
+                showToast("Generating high-res image...", "info", 2000);
+                
+                const originalSelected = state.selectedId;
+                const originalTransform = { ...state.transform };
+                
+                state.selectedId = null;
+                render();
+                
+                const nodes = Object.values(state.people);
+                const box = getBoundingBox(nodes);
+                const padding = 100;
+                
+                const targetWidth = Math.ceil(box.width + padding * 2);
+                const targetHeight = Math.ceil(box.height + padding * 2);
+                
+                els.canvas.style.transition = 'none';
+                els.canvas.style.width = targetWidth + 'px';
+                els.canvas.style.height = targetHeight + 'px';
+                els.canvas.style.transform = `translate(${-box.minX + padding}px, ${-box.minY + padding}px) scale(1)`;
+                
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                try {
+                    const canvas = await html2canvas(els.canvas, {
+                        backgroundColor: state.theme === 'dark' ? '#0f172a' : '#f8fafc',
+                        scale: 2,
+                        logging: false
+                    });
+                    
+                    const link = document.createElement('a');
+                    link.download = `nexus-tree-${new Date().toISOString().slice(0,10)}.png`;
+                    link.href = canvas.toDataURL('image/png');
+                    link.click();
+                    
+                    showToast("✨ Perfect image downloaded!", "success");
+                } catch (err) {
+                    console.error('Export error:', err);
+                    showToast("Export failed", "error");
+                } finally {
+                    els.canvas.style.cssText = '';
+                    els.canvas.style.width = '100%';
+                    els.canvas.style.height = '100%';
+                    state.transform = originalTransform;
+                    state.selectedId = originalSelected;
+                    render();
+                    applyTransform(false);
+                }
+            });
             
             els.fileImport.addEventListener('change', e => {
                 const file = e.target.files[0];
@@ -1505,85 +2141,11 @@
                     }
                 };
                 r.readAsText(file);
-                e.target.value = ''; // Reset input
-            });
-
-            // FIXED: Perfect image export
-            els.btnExportImage.addEventListener('click', async () => {
-                if (Object.keys(state.people).length === 0) {
-                    return showToast("Tree is empty", "error");
-                }
-                
-                showToast("Generating high-res image...", "info", 2000);
-                
-                // Save current state
-                const originalSelected = state.selectedId;
-                const originalTransform = { ...state.transform };
-                const originalCanvasStyle = els.canvas.style.cssText;
-                
-                // Deselect nodes and hide UI elements
-                state.selectedId = null;
-                render();
-                
-                // Calculate exact bounding box with padding
-                const nodes = Object.values(state.people);
-                const box = getBoundingBox(nodes);
-                const padding = 100;
-                
-                const targetWidth = Math.ceil(box.width + padding * 2);
-                const targetHeight = Math.ceil(box.height + padding * 2);
-                
-                // Position canvas to show entire tree
-                els.canvas.style.transition = 'none';
-                els.canvas.style.width = targetWidth + 'px';
-                els.canvas.style.height = targetHeight + 'px';
-                els.canvas.style.transform = `translate(${-box.minX + padding}px, ${-box.minY + padding}px) scale(1)`;
-                
-                // Wait for DOM update and any pending renders
-                await new Promise(resolve => setTimeout(resolve, 500));
-                
-                try {
-                    // Use html-to-image with proper configuration
-                    const dataUrl = await htmlToImage.toPng(els.canvas, {
-                        backgroundColor: state.theme === 'dark' ? '#0f172a' : '#f8fafc',
-                        width: targetWidth,
-                        height: targetHeight,
-                        pixelRatio: 2, // Retina quality
-                        skipAutoScale: true,
-                        quality: 1,
-                        cacheBust: true,
-                        style: {
-                            'transform': 'none',
-                            'transform-origin': 'top left'
-                        }
-                    });
-                    
-                    // Download
-                    const link = document.createElement('a');
-                    link.download = `nexus-tree-${new Date().toISOString().slice(0,10)}.png`;
-                    link.href = dataUrl;
-                    link.click();
-                    
-                    showToast("✨ Perfect image downloaded!", "success");
-                    
-                } catch (err) {
-                    console.error('Export error:', err);
-                    showToast("Export failed. Try JSON instead.", "error");
-                } finally {
-                    // Restore everything
-                    els.canvas.style.cssText = originalCanvasStyle;
-                    els.canvas.style.width = '100%';
-                    els.canvas.style.height = '100%';
-                    state.transform = originalTransform;
-                    state.selectedId = originalSelected;
-                    render();
-                    applyTransform(false);
-                }
+                e.target.value = '';
             });
 
             // keyboard shortcuts
             window.addEventListener('keydown', (e) => {
-                // Show keyboard hint
                 if (els.keyboardHint) {
                     els.keyboardHint.classList.add('visible');
                     clearTimeout(window.hintTimeout);
@@ -1592,7 +2154,6 @@
                     }, 2000);
                 }
                 
-                // Undo/Redo
                 if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
                     e.preventDefault();
                     if (e.shiftKey) {
@@ -1607,18 +2168,15 @@
                     els.btnRedo.click();
                 }
                 
-                // Fit view
                 if (e.key === ' ') {
                     e.preventDefault();
                     els.btnFitScreen.click();
                 }
                 
-                // Delete selected node
                 if (e.key === 'Delete' && state.selectedId) {
                     els.btnDeletePerson.click();
                 }
                 
-                // Escape to close sidebar / deselect
                 if (e.key === 'Escape') {
                     if (state.selectedId) {
                         state.selectedId = null;
@@ -1627,7 +2185,6 @@
                     }
                 }
                 
-                // Quick add shortcuts when node selected
                 if (state.selectedId) {
                     if (e.key === 'p' || e.key === 'P') {
                         e.preventDefault();
@@ -1643,10 +2200,27 @@
                     }
                 }
                 
-                // Auto layout
                 if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
                     e.preventDefault();
                     els.btnAutoLayout.click();
+                }
+                
+                // View mode shortcuts
+                if ((e.ctrlKey || e.metaKey) && e.key === '1') {
+                    e.preventDefault();
+                    setViewMode('tree');
+                }
+                if ((e.ctrlKey || e.metaKey) && e.key === '2') {
+                    e.preventDefault();
+                    setViewMode('org');
+                }
+                if ((e.ctrlKey || e.metaKey) && e.key === '3') {
+                    e.preventDefault();
+                    setViewMode('flow');
+                }
+                if ((e.ctrlKey || e.metaKey) && e.key === '4') {
+                    e.preventDefault();
+                    setViewMode('radial');
                 }
             });
 
@@ -1709,7 +2283,7 @@
                 let spId = p.spouse, isSplit = false, spStart = null;
                 if (spId && state.people[spId]) {
                     spStart = { ...state.people[spId].position };
-                    if (p.position.y === spStart.y && Math.abs(Math.round(p.position.x - spStart.x)) === NODE_WIDTH) {
+                    if (p.position.y === spStart.y && Math.abs(Math.round(p.position.x - spStart.x)) === NODE_WIDTH + COUPLE_SPACING_X) {
                         isSplit = true;
                     }
                 }
@@ -1725,7 +2299,6 @@
                     let nx = startPos.x + (me.clientX - sx) / state.transform.scale;
                     let ny = startPos.y + (me.clientY - sy) / state.transform.scale;
                     
-                    // Snap to grid while holding shift
                     if (me.shiftKey) {
                         nx = Math.round(nx / 20) * 20;
                         ny = Math.round(ny / 20) * 20;
@@ -1742,7 +2315,7 @@
                         if (spEl) spEl.style.transform = `translate(${snx}px, ${sny}px)`;
                     }
                     
-                    render(); // update edges live
+                    render();
                 };
                 
                 const onUp = (upEv) => {
@@ -1751,7 +2324,6 @@
                     window.removeEventListener('pointerup', onUp);
                     
                     if (moved) {
-                        // Update timestamps
                         Object.keys(state.people).forEach(key => {
                             if (state.people[key]) {
                                 state.people[key].updatedAt = new Date().toISOString();
@@ -1792,7 +2364,6 @@
                 const mouseX = e.clientX - r.left;
                 const mouseY = e.clientY - r.top;
                 
-                // Zoom toward mouse position
                 const scaleRatio = newScale / state.transform.scale;
                 const newX = mouseX - (mouseX - state.transform.x) * scaleRatio;
                 const newY = mouseY - (mouseY - state.transform.y) * scaleRatio;
@@ -1806,7 +2377,6 @@
                 applyTransform();
             }, { passive: false });
 
-            // Detect touch device for better UX
             if ('ontouchstart' in window) {
                 document.body.classList.add('touch-device');
             }
@@ -1814,7 +2384,6 @@
             // ---------- INIT ----------
             const init = () => {
                 try {
-                    // Apply theme
                     if (state.theme === 'dark') { 
                         document.documentElement.classList.add('dark'); 
                         els.themeIcon.className = 'fas fa-sun'; 
@@ -1823,7 +2392,9 @@
                         els.themeIcon.className = 'fas fa-moon'; 
                     }
 
-                    // Load saved data
+                    // Set initial view mode
+                    setViewMode(state.viewMode);
+
                     const saved = localStorage.getItem('nexusTreeData');
                     if (saved) {
                         try { 
@@ -1833,13 +2404,13 @@
                         }
                     }
                     
-                    // Create demo data if empty
                     if (!Object.keys(state.people).length) {
-                        // Create a beautiful demo tree
+                        // Create enhanced demo tree
                         const adam = generateId();
                         const eve = generateId();
                         const cain = generateId();
                         const abel = generateId();
+                        const seth = generateId();
                         
                         state.people[adam] = { 
                             ...getDefaultPerson(), 
@@ -1858,7 +2429,7 @@
                             name: 'Eve Nexus', 
                             gender: 'female', 
                             spouse: adam,
-                            position: { x: 500 + NODE_WIDTH, y: 200 },
+                            position: { x: 500 + NODE_WIDTH + 60, y: 200 },
                             birthDate: '1952-03-15',
                             birthPlace: 'Boston'
                         };
@@ -1871,7 +2442,7 @@
                             name: 'Cain Nexus', 
                             gender: 'male', 
                             parents: [adam, eve],
-                            position: { x: 500, y: 200 + GEN_SPACING_Y },
+                            position: { x: 400, y: 200 + GEN_SPACING_Y },
                             birthDate: '1975-06-20'
                         };
                         
@@ -1881,21 +2452,30 @@
                             name: 'Abel Nexus', 
                             gender: 'male', 
                             parents: [adam, eve],
-                            position: { x: 500 + NODE_WIDTH + 100, y: 200 + GEN_SPACING_Y },
+                            position: { x: 500 + NODE_WIDTH + 160, y: 200 + GEN_SPACING_Y },
                             birthDate: '1978-09-10'
                         };
                         
-                        state.people[adam].children = [cain, abel];
-                        state.people[eve].children = [cain, abel];
+                        state.people[seth] = { 
+                            ...getDefaultPerson(), 
+                            id: seth, 
+                            name: 'Seth Nexus', 
+                            gender: 'male', 
+                            parents: [adam, eve],
+                            position: { x: 600 + NODE_WIDTH*2, y: 200 + GEN_SPACING_Y },
+                            birthDate: '1980-12-25'
+                        };
                         
-                        showToast("✨ Welcome to Nexus Tree!", "success");
+                        state.people[adam].children = [cain, abel, seth];
+                        state.people[eve].children = [cain, abel, seth];
+                        
+                        showToast("✨ Welcome to Nexus Tree v3.0!", "success");
                     }
                     
                     updateHistory(state.people, true);
                     render();
                     setTimeout(() => fitToScreen(false), 100);
                     
-                    // Auto-save every 30 seconds
                     setInterval(() => {
                         saveToStorage();
                         showToast("Auto-saved", "info", 1000);
